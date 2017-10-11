@@ -1,8 +1,5 @@
 
-import pickle
-import midi
-import math
-import os
+import pickle, midi, math, os
 import numpy as np
 from glob import glob
 from collections import defaultdict
