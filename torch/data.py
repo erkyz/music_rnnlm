@@ -38,7 +38,7 @@ class Corpus(object):
         event_num = 0
         for f in util.getmidfiles(path):
             tuples = util.mid2tuples(f)
-            for tup in melody:
+            for tup in tuples:
                 ids[event_num] = self.dictionary.tup2i[tup]
                 event_num += 1
 

@@ -150,7 +150,7 @@ for epoch in range(args.epochs):
     train_losses.append(cum_loss / cum_event_count )
     val_losses.append(val_loss / val_event_count)
 
-sv.list2mid(lm.sample(), "../generated/test.mid")
+sv.list2mid(lm.sample(), "../../generated/test.mid")
 plot_nll(train_losses, val_losses)
 lm.save("../models/1")
 
