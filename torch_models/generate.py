@@ -14,7 +14,7 @@ parser.add_argument('--data', type=str, default='../music_data/Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--checkpoint', type=str, default='./model.pt',
                     help='model checkpoint to use')
-parser.add_argument('--outf', type=str, default='generated.txt',
+parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
 parser.add_argument('--max_events', type=int, default='200',
                     help='number of words to generate')
@@ -65,5 +65,5 @@ while len(events) < args.max_events:
     events.append(curr)
     if curr == sv[sv.END_EVENT].i: break
 
-sv.list2mid(events, "../../generated/test_torch.mid")
+sv.list2mid(events, "../../generated/" + args.outf)
 

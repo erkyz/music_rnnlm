@@ -1,7 +1,4 @@
 
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
 import dynet as dy
 
 import numpy as np
@@ -58,7 +55,6 @@ parser.add_argument("--learning_rate", default=0.2, help="set learning rate of t
 parser.add_argument("--batch_size", default=16, type=int, help="size of minibatches")
 
 parser.add_argument("--arch", default="baseline", help="choose what RNNLM architecture you want to use")
-parser.add_argument("--framework", default="dynet", help="choose what framework to use")
 
 args = parser.parse_args()
 batch_size = args.batch_size
