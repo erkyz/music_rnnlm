@@ -20,15 +20,12 @@ def plot_nll(train_losses, dev_losses):
     pylab.legend(handles=[train,dev])
     pylab.show()
 
-def get_loss_value_and_backprop(lm, batch, framework, trainer):
-    if framework == 'dynet':
-        batch_losses = lm.BuildLMGraph_batch(batch)
-        batch_loss = dy.sum_batches(batch_losses)
-        batch_loss.backward()
-        trainer.update()
-        return batch_loss.value()
-    else:
-        pass
+def get_loss_value_and_backprop(lm, batch, trainer):
+    batch_losses = lm.BuildLMGraph_batch(batch)
+    batch_loss = dy.sum_batches(batch_losses)
+    batch_loss.backward()
+    trainer.update()
+    return batch_loss.value()
 
 parser = argparse.ArgumentParser()
 
@@ -88,18 +85,15 @@ print "Num val melodies:", (len(val_order))
 # Build the model
 ###############################################################################
 
-if args.framework == 'dynet':
-    model = dy.Model()
-    if args.trainer == "sgd":
-        trainer = dy.SimpleSGDTrainer(model, learning_rate=1.0)
-    elif args.trainer == "adam":
-        trainer = dy.AdamTrainer(model, learning_Rate=0.001)
-    elif args.trainer == "adagrad":
-        trainer = dy.AdagradTrainer(model, learning_rate=0.01)
-else:
-    model = torchrnnlm.RNNModel(args, sv) 
+model = dy.Model()
+if args.trainer == "sgd":
+    trainer = dy.SimpleSGDTrainer(model, learning_rate=1.0)
+elif args.trainer == "adam":
+    trainer = dy.AdamTrainer(model, learning_Rate=0.001)
+elif args.trainer == "adagrad":
+    trainer = dy.AdagradTrainer(model, learning_rate=0.01)
 
-lm = rnnlm.get_model(args.arch + '_' + args.framework)(model, sv, args)
+lm = rnnlm.get_model(args.arch)(model, sv, args)
 
 
 ###############################################################################
@@ -119,8 +113,7 @@ for epoch in range(args.epochs):
         start_idx = batch_size*i
         end_idx = min(len(train_data)-1, batch_size*i + batch_size)
         batch = train_data[train_order[start_idx:end_idx]]
-        cum_loss += get_loss_value_and_backprop(lm, batch, 
-                args.framework, trainer)
+        cum_loss += get_loss_value_and_backprop(lm, batch, trainer)
         cum_event_count += sum([len(mel)-1 for mel in batch])
 
     #### validation 

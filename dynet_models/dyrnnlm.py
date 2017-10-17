@@ -6,7 +6,7 @@ import time, util
 import rnnlm
 
 class BaselineDyGenRNNLM(rnnlm.SaveableRNNLM):
-    name = "baseline_dynet"
+    name = "baseline"
 
     def add_params(self):
         if self.args.rnn == "lstm": rnn = dy.LSTMBuilder
