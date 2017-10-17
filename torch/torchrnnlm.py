@@ -4,8 +4,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 import time, util
 
-import rnnlm
-
 '''
 nhid = self.args.hidden_dim
 nlayers = self.args.layers

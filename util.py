@@ -97,6 +97,7 @@ class SimpleVocab(object):
         self.tuples = set([])
         self.i2e = defaultdict(PitchDurationEvent.not_found)
         self.tup2e = defaultdict(PitchDurationEvent.not_found)
+        self.tup2i = defaultdict(None)
         self.START_EVENT = None
         self.END_EVENT = None
         return
@@ -104,6 +105,9 @@ class SimpleVocab(object):
     @property
     def size(self):
 	return len(self.events)
+
+    def __len__(self):
+        return len(self.events)
  
     def add_event_tuple(self, pitch, duration):
         if (pitch,duration) in self.tuples:
@@ -112,6 +116,7 @@ class SimpleVocab(object):
         e = PitchDurationEvent(i, pitch, duration)
         self.i2e[i] = e
         self.tup2e[(pitch,duration)] = e
+        self.tup2i[(pitch,duration)] = i
         self.events.add(e)
         self.tuples.add((pitch,duration))
         return e
@@ -146,6 +151,7 @@ class SimpleVocab(object):
                 "tuples": self.tuples,
                 "i2e": dict(self.i2e),
                 "tup2e": dict(self.tup2e),
+                "tup2i": dict(self.tup2i),
                 "START_EVENT": self.START_EVENT,
                 "END_EVENT": self.END_EVENT
                 }
@@ -160,8 +166,10 @@ class SimpleVocab(object):
             v.tuples = info_dict["tuples"]
             v.i2e = defaultdict(PitchDurationEvent.not_found, info_dict["i2e"])
             v.tup2e = defaultdict(PitchDurationEvent.not_found, info_dict["tup2e"])
+            v.tup2i = defaultdict(None, info_dict["tup2i"])
             v.START_EVENT = info_dict["START_EVENT"]
             v.END_EVENT = info_dict["END_EVENT"]
+            print "Vocab size:", v.size
             return v
 
     @classmethod

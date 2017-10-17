@@ -85,6 +85,8 @@ class BaselineDyGenRNNLM(rnnlm.SaveableRNNLM):
             y_t = state.output()
             if APPLY_DROPOUT: y_t = dy.dropout(y_t, self.args.dropout)
             r_t = bias + (R * y_t)
+            # next_words should be the true classes.
+            # i.e., continually try to predict the next word.
             err = dy.pickneglogsoftmax_batch(r_t, next_words)
 
             mask_expr = dy.inputVector(mask)

@@ -5,10 +5,13 @@ import math
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import sys, os
 
-import model
-import util
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torchrnnlm
+import data
+import util
 
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
@@ -60,29 +63,10 @@ if torch.cuda.is_available():
 # Load data
 ###############################################################################
 
-sv = util.SimpleVocab.load_from_corpus(args.corpus, "../tmp/nott_sv.p")
+sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
+corpus = data.Corpus(args.data, sv)
 
-train_data = [util.mid2tuples(f) for f in util.getmidfiles(args.train)]
-val_data = [util.mid2tuples(f) for f in util.getmidfiles(args.valid)]
-# test_data = [util.mid2tuples(f) for f in util.getmidfiles(args.test)]
-
-train_data = [m for m in train_data if len(m) > 0]
-val_data = [m for m in val_data if len(m) > 0]
-# test_data = [m for m in test_data if len(m) > 0]
-
-train_data = np.array(train_data)
-val_data = np.array(val_data)
-# test_data = np.array(test_data)
-
-train_order = range(len(train_data))
-val_order = range(len(val_data))
-print "Num train melodies:", (len(train_order))
-print "Num val melodies:", (len(val_order))
-
-'''
-corpus = data.Corpus(args.data)
-
-def batchify(vocab, bsz):
+def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
     nbatch = data.size(0) // bsz
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
@@ -94,22 +78,21 @@ def batchify(vocab, bsz):
     return data
 
 eval_batch_size = 10
+
 train_data = batchify(corpus.train, args.batch_size)
 val_data = batchify(corpus.valid, eval_batch_size)
 test_data = batchify(corpus.test, eval_batch_size)
-'''
 
 ###############################################################################
 # Build the model
 ###############################################################################
 
 ntokens = sv.size
-model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied)
+model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied)
 if args.cuda:
     model.cuda()
 
 criterion = nn.CrossEntropyLoss()
-
 
 ###############################################################################
 # Training code

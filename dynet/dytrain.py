@@ -1,5 +1,4 @@
 
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -120,6 +119,7 @@ for epoch in range(args.epochs):
     #### run and log training
     random.shuffle(train_order)
     for i in range(int(len(train_data)/batch_size)):
+        # TODO you can step here with range!
         start_idx = batch_size*i
         end_idx = min(len(train_data)-1, batch_size*i + batch_size)
         batch = train_data[train_order[start_idx:end_idx]]
