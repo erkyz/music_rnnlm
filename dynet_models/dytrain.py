@@ -1,11 +1,8 @@
 
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-import dynet as dy
 
-import numpy as np
 import argparse, pylab, io, random, math, time, sys, os
+import dynet as dy
+import numpy as np
 from os import walk
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,15 +20,12 @@ def plot_nll(train_losses, dev_losses):
     pylab.legend(handles=[train,dev])
     pylab.show()
 
-def get_loss_value_and_backprop(lm, batch, framework, trainer):
-    if framework == 'dynet':
-        batch_losses = lm.BuildLMGraph_batch(batch)
-        batch_loss = dy.sum_batches(batch_losses)
-        batch_loss.backward()
-        trainer.update()
-        return batch_loss.value()
-    else:
-        pass
+def get_loss_value_and_backprop(lm, batch, trainer):
+    batch_losses = lm.BuildLMGraph_batch(batch)
+    batch_loss = dy.sum_batches(batch_losses)
+    batch_loss.backward()
+    trainer.update()
+    return batch_loss.value()
 
 parser = argparse.ArgumentParser()
 
@@ -45,20 +39,19 @@ parser.add_argument("--valid", default="../music_data/Nottingham/valid/", help="
 parser.add_argument("--test", default="../music_data/Nottingham/test/", help="location of test data")
 
 # rnn params
-parser.add_argument("--rnn", default="lstm", choices={"lstm","rnn","gru"}, help="choose type of RNN")
+parser.add_argument("--rnn", default="lstm", help="choose type of RNN")
 parser.add_argument("--layers", default=1, type=int, help="choose number of layers for RNN")
 parser.add_argument("--input_dim", default=25, type=int, help="choose token embedding dimension")
 parser.add_argument("--hidden_dim", default=100, type=int, help="choose size of hidden state of RNN")
 parser.add_argument("--dropout", default=.1, type=float, help="set dropout probability")
 
 # experiment params
-parser.add_argument("--trainer", default="sgd", choices={"sgd", "adam", "adagrad"}, help="choose training algorithm")
+parser.add_argument("--trainer", default="sgd", help="choose training algorithm")
 parser.add_argument("--epochs", default=10, type=int, help="maximum number of epochs to run experiment")
 parser.add_argument("--learning_rate", default=0.2, help="set learning rate of trainer")
 parser.add_argument("--batch_size", default=16, type=int, help="size of minibatches")
 
 parser.add_argument("--arch", default="baseline", help="choose what RNNLM architecture you want to use")
-parser.add_argument("--framework", default="dynet", help="choose what framework to use")
 
 args = parser.parse_args()
 batch_size = args.batch_size
@@ -92,18 +85,15 @@ print "Num val melodies:", (len(val_order))
 # Build the model
 ###############################################################################
 
-if args.framework == 'dynet':
-    model = dy.Model()
-    if args.trainer == "sgd":
-        trainer = dy.SimpleSGDTrainer(model, learning_rate=1.0)
-    elif args.trainer == "adam":
-        trainer = dy.AdamTrainer(model, learning_Rate=0.001)
-    elif args.trainer == "adagrad":
-        trainer = dy.AdagradTrainer(model, learning_rate=0.01)
-else:
-    model = torchrnnlm.RNNModel(args, sv) 
+model = dy.Model()
+if args.trainer == "sgd":
+    trainer = dy.SimpleSGDTrainer(model, learning_rate=1.0)
+elif args.trainer == "adam":
+    trainer = dy.AdamTrainer(model)
+elif args.trainer == "adagrad":
+    trainer = dy.AdagradTrainer(model, learning_rate=0.01)
 
-lm = rnnlm.get_model(args.arch + '_' + args.framework)(model, sv, args)
+lm = rnnlm.get_model(args.arch)(model, sv, args)
 
 
 ###############################################################################
@@ -123,8 +113,7 @@ for epoch in range(args.epochs):
         start_idx = batch_size*i
         end_idx = min(len(train_data)-1, batch_size*i + batch_size)
         batch = train_data[train_order[start_idx:end_idx]]
-        cum_loss += get_loss_value_and_backprop(lm, batch, 
-                args.framework, trainer)
+        cum_loss += get_loss_value_and_backprop(lm, batch, trainer)
         cum_event_count += sum([len(mel)-1 for mel in batch])
 
     #### validation 
@@ -152,7 +141,7 @@ for epoch in range(args.epochs):
 
 sv.list2mid(lm.sample(), "../../generated/test.mid")
 plot_nll(train_losses, val_losses)
-lm.save("../models/1")
+lm.save("../../tmp")
 
 ######## Get test stats (TODO)
 
