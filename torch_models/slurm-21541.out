@@ -1,0 +1,181 @@
++ set -e
++ module load singularity
+++ /usr/bin/modulecmd bash load singularity
++ eval LD_LIBRARY_PATH=/opt/singularity/lib:/opt/openmpi/lib ';export' 'LD_LIBRARY_PATH;LOADEDMODULES=rocks-openmpi:singularity' ';export' 'LOADEDMODULES;MANPATH=/opt/singularity/share/man:/usr/share/man' ';export' 'MANPATH;PATH=/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin' ';export' 'PATH;SINGULARITY_SHELL=/bin/bash' ';export' 'SINGULARITY_SHELL;_LMFILES_=/usr/share/Modules/modulefiles/rocks-openmpi:/usr/share/Modules/modulefiles/singularity' ';export' '_LMFILES_;'
+++ LD_LIBRARY_PATH=/opt/singularity/lib:/opt/openmpi/lib
+++ export LD_LIBRARY_PATH
+++ LOADEDMODULES=rocks-openmpi:singularity
+++ export LOADEDMODULES
+++ MANPATH=/opt/singularity/share/man:/usr/share/man
+++ export MANPATH
+++ PATH=/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin
+++ export PATH
+++ SINGULARITY_SHELL=/bin/bash
+++ export SINGULARITY_SHELL
+++ _LMFILES_=/usr/share/Modules/modulefiles/rocks-openmpi:/usr/share/Modules/modulefiles/singularity
+++ export _LMFILES_
++ singularity shell /projects/tir1/singularity/tensorflow-ubuntu-16.04.2-lts-nvidia-375.26.img
+WARNING: Non existant bind point (directory) in container: '/lib/modules'
+Singularity: Invoking an interactive shell within container...
+
++ module load cuda-8.0 cudnn-8.0-5.1
+++ /usr/bin/modulecmd bash load cuda-8.0 cudnn-8.0-5.1
++ eval CPATH=/opt/cudnn-5.1/include ';export' 'CPATH;C_INCLUDE_PATH=/opt/cudnn-5.1/include' ';export' 'C_INCLUDE_PATH;LD_LIBRARY_PATH=/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib' ';export' 'LD_LIBRARY_PATH;LOADEDMODULES=rocks-openmpi:singularity:cuda-8.0:cudnn-8.0-5.1' ';export' 'LOADEDMODULES;PATH=/opt/cuda-8.0/bin:/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin' ';export' 'PATH;_LMFILES_=/usr/share/Modules/modulefiles/rocks-openmpi:/usr/share/Modules/modulefiles/singularity:/usr/share/Modules/modulefiles/cuda-8.0:/usr/share/Modules/modulefiles/cudnn-8.0-5.1' ';export' '_LMFILES_;'
+++ CPATH=/opt/cudnn-5.1/include
+++ export CPATH
+++ C_INCLUDE_PATH=/opt/cudnn-5.1/include
+++ export C_INCLUDE_PATH
+++ LD_LIBRARY_PATH=/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
+++ export LD_LIBRARY_PATH
+++ LOADEDMODULES=rocks-openmpi:singularity:cuda-8.0:cudnn-8.0-5.1
+++ export LOADEDMODULES
+++ PATH=/opt/cuda-8.0/bin:/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin
+++ export PATH
+++ _LMFILES_=/usr/share/Modules/modulefiles/rocks-openmpi:/usr/share/Modules/modulefiles/singularity:/usr/share/Modules/modulefiles/cuda-8.0:/usr/share/Modules/modulefiles/cudnn-8.0-5.1
+++ export _LMFILES_
++ export CUDA_HOME=/projects/tir1/cuda-8.0.27.1
++ CUDA_HOME=/projects/tir1/cuda-8.0.27.1
++ PATH=/home/ericzhu/bin:/opt/cuda-8.0/bin:/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin
++ PATH=/projects/tir1/cuda-8.0.27.1/bin:/home/ericzhu/bin:/opt/cuda-8.0/bin:/opt/singularity/bin:/projects/tir1/ericzhu/bin:/opt/openmpi/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/sbin:/opt/ganglia/bin:/opt/ganglia/sbin:/usr/java/latest/bin:/opt/pdsh/bin:/opt/rocks/bin:/opt/rocks/sbin:/home/ericzhu/bin
++ export PATH
++ export LD_LIBRARY_PATH=/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ LD_LIBRARY_PATH=/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ export CPATH=/projects/tir1/cuda-8.0.27.1/include:/opt/cudnn-5.1/include
++ CPATH=/projects/tir1/cuda-8.0.27.1/include:/opt/cudnn-5.1/include
++ export LIBRARY_PATH=/projects/tir1/cuda-8.0.27.1/lib64:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ LIBRARY_PATH=/projects/tir1/cuda-8.0.27.1/lib64:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ export LD_LIBRARY_PATH=/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ LD_LIBRARY_PATH=/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ export CPATH=/opt/cudnn-8.0/include:/projects/tir1/cuda-8.0.27.1/include:/opt/cudnn-5.1/include
++ CPATH=/opt/cudnn-8.0/include:/projects/tir1/cuda-8.0.27.1/include:/opt/cudnn-5.1/include
++ export LIBRARY_PATH=/opt/cudnn-8.0/lib64:/opt/cudnn-8.0/lib64:/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ LIBRARY_PATH=/opt/cudnn-8.0/lib64:/opt/cudnn-8.0/lib64:/home/ericzhu/music_rnnlm/software/pytorch-0.2.0-py36h53baedd_4cu80:/projects/tir1/cuda-8.0.27.1/lib64:/opt/cudnn-5.1/lib64:/opt/cuda-8.0/lib64:/opt/cuda-8.0/lib:/opt/singularity/lib:/opt/openmpi/lib
++ python train.py --cuda
+Vocab size: 314
+-----------------------------------------------------------------------------------------
+| end of epoch   1 | time:  5.28s | valid loss  3.17 | valid ppl    23.78
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   2 | time:  1.49s | valid loss  2.79 | valid ppl    16.21
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   3 | time:  1.49s | valid loss  2.68 | valid ppl    14.58
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   4 | time:  1.49s | valid loss  2.65 | valid ppl    14.16
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   5 | time:  1.49s | valid loss  2.63 | valid ppl    13.86
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   6 | time:  1.53s | valid loss  2.64 | valid ppl    14.00
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   7 | time:  1.49s | valid loss  2.50 | valid ppl    12.17
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   8 | time:  1.50s | valid loss  2.51 | valid ppl    12.32
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch   9 | time:  1.50s | valid loss  2.49 | valid ppl    12.02
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  10 | time:  1.50s | valid loss  2.48 | valid ppl    12.00
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  11 | time:  1.50s | valid loss  2.49 | valid ppl    12.06
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  12 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  13 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  14 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  15 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  16 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  17 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  18 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  19 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  20 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  21 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  22 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  23 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  24 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  25 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  26 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  27 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  28 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  29 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  30 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  31 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  32 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  33 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  34 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  35 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  36 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  37 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  38 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  39 | time:  1.49s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+| end of epoch  40 | time:  1.50s | valid loss  2.50 | valid ppl    12.13
+-----------------------------------------------------------------------------------------
+/home/ericzhu/music_rnnlm/torch_models/torchrnnlm.py:62: UserWarning: RNN module weights are not part of single contiguous chunk of memory. This means they need to be compacted at every call, possibly greately increasing memory usage. To compact weights again call flatten_parameters().
+  output, hidden = self.rnn(emb, hidden)
+=========================================================================================
+| End of training | test loss  2.57 | test ppl    13.03
+=========================================================================================

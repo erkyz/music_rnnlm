@@ -1,8 +1,8 @@
 
+import torch
 import argparse
 import time
 import math
-import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import sys, os
