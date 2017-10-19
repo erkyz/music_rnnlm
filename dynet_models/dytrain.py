@@ -39,14 +39,14 @@ parser.add_argument("--valid", default="../music_data/Nottingham/valid/", help="
 parser.add_argument("--test", default="../music_data/Nottingham/test/", help="location of test data")
 
 # rnn params
-parser.add_argument("--rnn", default="lstm", choices={"lstm","rnn","gru"}, help="choose type of RNN")
+parser.add_argument("--rnn", default="lstm", help="choose type of RNN")
 parser.add_argument("--layers", default=1, type=int, help="choose number of layers for RNN")
 parser.add_argument("--input_dim", default=25, type=int, help="choose token embedding dimension")
 parser.add_argument("--hidden_dim", default=100, type=int, help="choose size of hidden state of RNN")
 parser.add_argument("--dropout", default=.1, type=float, help="set dropout probability")
 
 # experiment params
-parser.add_argument("--trainer", default="sgd", choices={"sgd", "adam", "adagrad"}, help="choose training algorithm")
+parser.add_argument("--trainer", default="sgd", help="choose training algorithm")
 parser.add_argument("--epochs", default=10, type=int, help="maximum number of epochs to run experiment")
 parser.add_argument("--learning_rate", default=0.2, help="set learning rate of trainer")
 parser.add_argument("--batch_size", default=16, type=int, help="size of minibatches")
@@ -89,7 +89,7 @@ model = dy.Model()
 if args.trainer == "sgd":
     trainer = dy.SimpleSGDTrainer(model, learning_rate=1.0)
 elif args.trainer == "adam":
-    trainer = dy.AdamTrainer(model, learning_Rate=0.001)
+    trainer = dy.AdamTrainer(model)
 elif args.trainer == "adagrad":
     trainer = dy.AdagradTrainer(model, learning_rate=0.01)
 
@@ -141,7 +141,7 @@ for epoch in range(args.epochs):
 
 sv.list2mid(lm.sample(), "../../generated/test.mid")
 plot_nll(train_losses, val_losses)
-lm.save("../models/1")
+lm.save("../../tmp")
 
 ######## Get test stats (TODO)
 

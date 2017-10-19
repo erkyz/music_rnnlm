@@ -1,5 +1,5 @@
 
-import os
+import os, random
 import torch
 import util
 
@@ -30,17 +30,20 @@ class Corpus(object):
         assert os.path.exists(path)
 
         num_events = 0
+        files = []
         for f in util.getmidfiles(path):
             melody = util.mid2tuples(f)
+            files.append(f)
             num_events += len(melody)
+
+        random.shuffle(files)
 
         ids = torch.LongTensor(num_events)
         event_num = 0
-        for f in util.getmidfiles(path):
+        for f in files:
             tuples = util.mid2tuples(f)
             for tup in tuples:
                 ids[event_num] = self.dictionary.tup2i[tup]
                 event_num += 1
 
         return ids
-
