@@ -7,7 +7,7 @@ import time, util
 class RNNModel(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
-    def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False):
+    def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, attention=False):
         super(RNNModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
@@ -39,6 +39,7 @@ class RNNModel(nn.Module):
         emb = self.drop(self.encoder(input))
         output, hidden = self.rnn(emb, hidden)
         output = self.drop(output)
+
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
 
