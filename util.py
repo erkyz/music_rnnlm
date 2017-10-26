@@ -6,6 +6,7 @@ from collections import defaultdict
 
 START_OF_TRACK = (-1,-1)
 END_OF_TRACK = (-2,-1)
+MEASURE = (-3,-1)
 NUM_SPLIT = 4  # number of splits per quarter note
 NUM_PITCHES = 128
 GEN_RESOLUTION = 480
@@ -78,15 +79,25 @@ def mid2tuples(f):
     resolution = pattern.resolution
     if len(pattern) < 2:
         return []
-    top = [e for e in pattern[1] if 
-            (type(e) is midi.NoteOnEvent or type(e) is midi.NoteOffEvent)]
+    top_melody = []
+    bpm = 4
+    for e in pattern[1]:
+        if type(e) is midi.SetTempoEvent:
+            bpm = e.get_bpm()
+        if type(e) is midi.NoteOnEvent or type(e) is midi.NoteOffEvent:
+            top_melody.append(e)
     out = [START_OF_TRACK]
-    for i in range(int(len(top)/2)):
-        on = top[2*i]
-        off = top[2*i+1]
+    measure_progress = 0
+    for i in range(int(len(top_melody)/2)):
+        if measure_progress > NUM_SPLIT * bpm:
+            out.append(MEASURE)
+            measure_progress = 0
+        on = top_melody[2*i]
+        off = top_melody[2*i+1]
         on = quantize(on, resolution)
         off = quantize(off, resolution)
         duration = off.tick / (resolution / NUM_SPLIT)
+        measure_progress += duration
         out.append((on.pitch, duration))
     out.append(END_OF_TRACK)
     return out
@@ -99,8 +110,11 @@ class SimpleVocab(object):
         self.tup2e = defaultdict(PitchDurationEvent.not_found)
         self.tup2i = defaultdict(None)
         self.e2i = defaultdict(None)
-        self.START_EVENT = None
-        self.END_EVENT = None
+        self.special_events = {
+                "start": self.add_event_tuple(START_OF_TRACK),
+                "end": self.add_event_tuple(END_OF_TRACK),
+                "measure": self.add_event_tuple(MEASURE),
+                }
         return
       
     @property
@@ -110,7 +124,8 @@ class SimpleVocab(object):
     def __len__(self):
         return len(self.events)
  
-    def add_event_tuple(self, pitch, duration):
+    def add_event_tuple(self, pd):
+        pitch, duration = pd
         if (pitch,duration) in self.tuples:
             return
         i = len(self.events)
@@ -134,11 +149,11 @@ class SimpleVocab(object):
         pattern.append(track)
         for x in l:
             e = self[x]
-            if e == self.START_EVENT:
-                continue
-            if e == self.END_EVENT:
+            if e == self.special_events["end"]:
                 track.append(midi.EndOfTrackEvent())
                 break
+            if e in self.special_events:
+                continue
             on = midi.NoteOnEvent(tick=0, velocity=120, pitch=e.pitch)
             track.append(on)
             off = midi.NoteOffEvent(
@@ -155,8 +170,7 @@ class SimpleVocab(object):
                 "tup2e": dict(self.tup2e),
                 "tup2i": dict(self.tup2i),
                 "e2i": dict(self.e2i),
-                "START_EVENT": self.START_EVENT,
-                "END_EVENT": self.END_EVENT
+                "special_events": self.special_events,
                 }
         with open(filename, "w") as f: pickle.dump(info_dict, f)
 
@@ -171,8 +185,7 @@ class SimpleVocab(object):
             v.tup2e = defaultdict(PitchDurationEvent.not_found, info_dict["tup2e"])
             v.tup2i = defaultdict(None, info_dict["tup2i"])
             v.e2i = defaultdict(None, info_dict["e2i"])
-            v.START_EVENT = info_dict["START_EVENT"]
-            v.END_EVENT = info_dict["END_EVENT"]
+            v.special_events = info_dict["special_events"]
             print "Vocab size:", v.size
             return v
 
@@ -182,13 +195,11 @@ class SimpleVocab(object):
             return SimpleVocab.load(vocab_fname)
         v = SimpleVocab()
 	filenames = getmidfiles(path) 
-        v.START_EVENT = v.add_event_tuple(-1,-1)
-        v.END_EVENT = v.add_event_tuple(-2,-1)
         for filename in filenames:
             with open(filename) as f:
 		events = mid2tuples(f)
 		for pitch, duration in events:
-		    v.add_event_tuple(pitch, duration)
+		    v.add_event_tuple((pitch, duration))
         print "Vocab size:", v.size
         v.save(vocab_fname)
         return v
