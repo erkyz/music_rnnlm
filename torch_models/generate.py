@@ -18,6 +18,8 @@ parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
 parser.add_argument('--max_events', type=int, default='200',
                     help='number of words to generate')
+parser.add_argument('--num_out', type=int, default='10',
+                    help='number of melodies to generate')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
@@ -51,19 +53,22 @@ else:
 sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
 ntokens = len(sv)
 hidden = model.init_hidden(1)
-input = Variable(torch.rand(1, 1).mul(ntokens).long(), volatile=True)
+# Input should be START token, which is always zero.
+input = Variable(torch.FloatTensor(1, 1).zero_().long(), volatile=True)
 if args.cuda:
     input.data = input.data.cuda()
 
-events = []
-while len(events) < args.max_events:
-    output, hidden = model(input, hidden)
-    word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
-    word_idx = torch.multinomial(word_weights, 1)[0]
-    input.data.fill_(word_idx)
-    curr = sv[word_idx]
-    events.append(curr)
-    if curr == sv[sv.special_events["end"]].i: break
+for i in range(args.num_out):
+	events = []
+	while len(events) < args.max_events:
+	    output, hidden = model(input, hidden)
+	    word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
+	    word_idx = torch.multinomial(word_weights, 1)[0]
+	    input.data.fill_(word_idx)
+	    curr = sv[word_idx]
+	    events.append(curr)
+	    if curr == sv[sv.special_events["end"]].i: break
 
-sv.list2mid(events, "../../generated/" + args.outf)
+	sv.list2mid(events, "../../generated/" + args.outf + str(i) + '.mid')
+
 
