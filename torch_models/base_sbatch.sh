@@ -26,6 +26,6 @@ export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
  
 python train.py --cuda --save="../tmp/base.pt"
-python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" 
+# python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" 
 
 
