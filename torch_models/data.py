@@ -2,11 +2,12 @@
 import os, random
 import torch
 import util
+import pickle
 
 MAX_ALLOWED_MULTIPLIER = 2
 
 class Corpus(object):
-    def __init__(self, path, dictionary, pad=False):
+    def __init__(self, path, dictionary, save_fname):
         self.dictionary  = dictionary
         self.train, self.train_masks, self.train_maxlen = \
                 self.eventize(os.path.join(path, 'train'))

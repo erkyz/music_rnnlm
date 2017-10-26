@@ -1,5 +1,5 @@
 
-
+import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import time, util
@@ -36,7 +36,6 @@ class RNNModel(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
-	print input
         emb = self.drop(self.encoder(input))
         output, hidden = self.rnn(emb, hidden)
         output = self.drop(output)
@@ -52,45 +51,60 @@ class RNNModel(nn.Module):
         else:
             return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
 
-def where(cond, x_1, x_2):
-    return (cond * x_1) + ((1-cond) * x_2)
-
 
 class HRNNModel(nn.Module):
     """Hierarchical LSTM"""
-    '''MUST take batch size of one'''
+    '''MUST take batch size of one, one layer (for now)'''
+    # TODO different hyperparams (esp learning rate), type of model
 
-    def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.1):
-        super(RNNModel, self).__init__()
-        low_out_dim = 30
-        # TODO different hyperparams
-        self.low = RNNModel(rnn_type, low_out_dim, ninp, nhid, nlayers, dropout)
-        self.high = RNNModel(rnn_type, ntoken, low_out_dim, nhid, nlayers, dropout)
-        self.init_weights()
+    def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers=1, dropout=0.1):
+        super(HRNNModel, self).__init__()
+	nlayers = 1
+        self.low = RNNModel(rnn_type, ntoken, ninp, nhid, nlayers, dropout)
+        self.high = RNNModel(rnn_type, nhid, ninp, nhid, nlayers, dropout) # TODO
 
-    def init_weights(self):
-        self.low.init_weights()
-        self.high.init_weights()
+    def train(self):
+	super(HRNNModel, self).train()
+	self.low.train()
+	self.high.train()
 
-    # TODO really shouldn't be recursive...
+    def zero_grad(self):
+	super(HRNNModel, self).zero_grad()
+	self.low.zero_grad()
+	self.high.zero_grad()
+
+    # TODO Better to just loop.
+    # TODO Which in the tuple from an LSTM should you get?
     # Dude this is a computation graph, everything needs to be an op.
-    def forward_recurse(self, input, hidden_low, hidden_high):
-        print input[0]
-        if input[0][0].value == 0:
-            hidden_low = self.high(hidden_low, hidden_high)
-        step_inp = input.narrow(dimension=1, start=1, 1) 
-        step_out, hidden_low = self.low(step_inp, hidden)
-        next_inp = input.narrow(dimension=1, start=1, input.size()[1]-1) 
-        return torch.cat(step_out, self.forward_step(next_inp, hidden_low))
+    def forward_recurse(self, inp, hidden_low, hidden_high):
+	# new measure
+	if (inp.size()[0] == 1):
+	    step_inp = inp.narrow(0, 0, 1) 
+            step_out, _ = self.low(step_inp, hidden_low)
+	    return step_out
+        if (inp[0].data == 2).all():
+            # hidden_low, hidden_high = self.high(hidden_low[0].view(-1), hidden_high)
+            step_inp = inp.narrow(0, 0, 1)
+	    print step_inp
+            hidden_low, hidden_high = self.high(step_inp, hidden_high) # TODO
+        
+	print step_inp
+	step_inp = inp.narrow(0, 0, 1)
+        step_out, hidden_low = self.low(step_inp, hidden_low)
+        next_inp = inp.narrow(0, 1, inp.size()[0]-1)
+        return torch.cat((step_out, self.forward_recurse(next_inp, hidden_low, hidden_high)))
 
     def forward(self, input, hidden_low, hidden_high):
-        emb = self.drop(self.encoder(input))
-        output = self.forward_recurse(emb, hidden_low, hidden_high)
-        output = self.drop(output)
+	'''
+	out = []
+	for i in range(input.size()[0]):
+	    step_inp = inp.narrow(0, i, i+1) 
+     	    step_out, hidden_low = self.low(step_inp, hidden_low)
+	    out.append(step_out)
+	return torch.LongTensor(out)
+	'''
 
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1), 
-                hidden_low, hidden_high)
+        return self.forward_recurse(input, hidden_low, hidden_high), hidden_low, hidden_high
 
     def init_hidden(self, bsz):
         return self.low.init_hidden(bsz), self.high.init_hidden(bsz)

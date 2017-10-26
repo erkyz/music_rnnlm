@@ -23,7 +23,7 @@ parser.add_argument('--emsize', type=int, default=200,
                     help='size of word embeddings')
 parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
-parser.add_argument('--nlayers', type=int, default=2,
+parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
 parser.add_argument('--lr', type=float, default=10,
                     help='initial learning rate')
@@ -64,7 +64,7 @@ if torch.cuda.is_available():
 ###############################################################################
 
 sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
-corpus = data.Corpus(args.data, sv)
+corpus = data.Corpus(args.data, sv, "../tmp/nott_corpus.p")
 
 args.batch_size = 1
 
@@ -92,16 +92,11 @@ test_masks = batchify(corpus.test_masks, eval_batch_size)
 # Build the model
 ###############################################################################
 
-LOW_OUT_DIM = 30
-
-
 ntokens = sv.size
 
-model = torchrnnlm.RNNModel(args.model, low_out_dim, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
-top_model = torchrnnlm.RNNModel(args.model, ntokens, low_out_dim, args.nhid, args.nlayers, args.dropout, args.attention)
+model = torchrnnlm.HRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
 if args.cuda:
     model.cuda()
-    top_model.cuda()
 
 criterion = nn.CrossEntropyLoss()
 
@@ -154,14 +149,16 @@ def train():
         hidden_low = repackage_hidden(hidden_low)
         hidden_high = repackage_hidden(hidden_high)
         model.zero_grad()
-        output, hidden = model(data, hidden_low, hidden_high)
+        output, hidden_low, hidden_high = model(data, hidden_low, hidden_high)
         loss = args.batch_size * corpus.train_maxlen * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
         loss.backward()
 
+	'''
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
         for p in model.parameters():
             p.data.add_(-lr, p.grad.data)
+	'''
 
         total_loss += loss.data
 
@@ -182,6 +179,7 @@ best_val_loss = None
 # At any point you can hit Ctrl + C to break out of training early.
 try:
     for epoch in range(1, args.epochs+1):
+	print epoch
         epoch_start_time = time.time()
         train()
         val_loss = evaluate(val_data, val_masks, corpus.valid_maxlen)
