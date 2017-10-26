@@ -84,6 +84,9 @@ eval_batch_size = 10
 train_data = batchify(corpus.train, args.batch_size)
 val_data = batchify(corpus.valid, eval_batch_size)
 test_data = batchify(corpus.test, eval_batch_size)
+train_masks = batchify(corpus.train_masks, args.batch_size)
+val_masks = batchify(corpus.valid_masks, eval_batch_size)
+test_masks = batchify(corpus.test_masks, eval_batch_size)
 
 ###############################################################################
 # Build the model
@@ -97,7 +100,7 @@ else:
 if args.cuda:
     model.cuda()
 
-criterion = nn.CrossEntropyLoss(size_average=False)
+criterion = nn.CrossEntropyLoss()
 
 ###############################################################################
 # Training code
@@ -111,26 +114,27 @@ def repackage_hidden(h):
         return tuple(repackage_hidden(v) for v in h)
 
 
-def get_batch(source, i, seq_len,  evaluation=False):
+def get_batch(source, i, seq_len, evaluation=False):
     this_seq_len = min(seq_len, len(source) - 1 - i)
     data = Variable(source[i:i+this_seq_len], volatile=evaluation)
     target = Variable(source[i+1:i+1+this_seq_len].view(-1))
     return data, target
 
 
-def evaluate(data_source, max_len):
+def evaluate(data_source, data_masks, bptt):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(eval_batch_size)
-    for i in range(0, data_source.size(0) - 1, max_len):
-        data, targets = get_batch(data_source, i, max_len, evaluation=True)
+    for i in range(0, data_source.size(0) - 1, bptt):
+        data, targets = get_batch(data_source, i, bptt, evaluation=True)
+        masks, _ = get_batch(data_masks, i, bptt, evaluation=True)
         output, hidden = model(data, hidden)
-        output_flat = output.view(-1, ntokens)
-        total_loss += len(data) * criterion(output_flat, targets).data # TODO huh?
+        output, hidden = model(data, hidden)
+        total_loss += len(data) * eval_batch_size * bptt * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
         hidden = repackage_hidden(hidden)
-    return total_loss[0] / len(data_source)
+    return total_loss.data[0] / len(data_source)
 
 
 def train():
@@ -142,12 +146,13 @@ def train():
     hidden = model.init_hidden(args.batch_size)
     for batch, i in enumerate(range(0, train_data.size(0) - 1, corpus.train_maxlen)):
         data, targets = get_batch(train_data, i, corpus.train_maxlen)
+        masks, _ = get_batch(train_masks, i, corpus.train_maxlen)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
         output, hidden = model(data, hidden)
-        loss = criterion(output.view(-1, ntokens), targets) / corpus.train_ntokens
+        loss = args.batch_size * corpus.train_maxlen * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
         loss.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -176,7 +181,7 @@ try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train()
-        val_loss = evaluate(val_data, corpus.val_maxlen)
+        val_loss = evaluate(val_data, val_masks, corpus.valid_maxlen)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
@@ -199,7 +204,7 @@ with open(args.save, 'rb') as f:
     model = torch.load(f)
 
 # Run on test data.
-test_loss = evaluate(test_data, corpus.test_maxlen)
+test_loss = evaluate(test_data, test_masks, corpus.test_maxlen)
 print('=' * 89)
 print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
     test_loss, math.exp(test_loss)))
