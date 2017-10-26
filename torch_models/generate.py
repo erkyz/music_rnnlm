@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 # Model parameters.
 parser.add_argument('--data', type=str, default='../music_data/Nottingham/',
                     help='location of the data corpus')
-parser.add_argument('--checkpoint', type=str, default='./model.pt',
+parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
 parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')

@@ -15,8 +15,6 @@ import util
 
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
-parser.add_argument("--dynet-gpu", help="use GPU acceleration")
-
 parser.add_argument('--data', type=str, default='../music_data/Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--model', type=str, default='LSTM',
@@ -27,7 +25,7 @@ parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=2,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=20,
+parser.add_argument('--lr', type=float, default=10,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -47,9 +45,11 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
-parser.add_argument('--save', type=str,  default='../../tmp/model.pt',
+parser.add_argument('--save', type=str,  default='../tmp/model.pt',
                     help='path to save the final model')
 args = parser.parse_args()
+
+print args
 
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
