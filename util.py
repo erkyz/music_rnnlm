@@ -152,7 +152,7 @@ class SimpleVocab(object):
             if e == self.special_events["end"]:
                 track.append(midi.EndOfTrackEvent())
                 break
-            if e in self.special_events:
+            if e in self.special_events.values():
                 continue
             on = midi.NoteOnEvent(tick=0, velocity=120, pitch=e.pitch)
             track.append(on)

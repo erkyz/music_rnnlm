@@ -63,7 +63,7 @@ while len(events) < args.max_events:
     input.data.fill_(word_idx)
     curr = sv[word_idx]
     events.append(curr)
-    if curr == sv[sv.END_EVENT].i: break
+    if curr == sv[sv.special_events["end"]].i: break
 
 sv.list2mid(events, "../../generated/" + args.outf)
 

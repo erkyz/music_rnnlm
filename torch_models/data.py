@@ -47,7 +47,7 @@ class Corpus(object):
                 masks[event_num] = 1
                 event_num += 1
             for i in range(max_allowed_len - len(tuples)):
-                ids[event_num] = self.dictionary.e2i[self.dictionary.END_EVENT]
+                ids[event_num] = self.dictionary.e2i[self.dictionary.special_events["end"]]
                 masks[event_num] = 0
                 event_num += 1
 

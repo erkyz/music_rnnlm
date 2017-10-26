@@ -131,7 +131,6 @@ def evaluate(data_source, data_masks, bptt):
         data, targets = get_batch(data_source, i, bptt, evaluation=True)
         masks, _ = get_batch(data_masks, i, bptt, evaluation=True)
         output, hidden = model(data, hidden)
-        output, hidden = model(data, hidden)
         total_loss += len(data) * eval_batch_size * bptt * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
         hidden = repackage_hidden(hidden)
     return total_loss.data[0] / len(data_source)
