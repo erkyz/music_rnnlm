@@ -149,8 +149,17 @@ def train():
         hidden_low = repackage_hidden(hidden_low)
         hidden_high = repackage_hidden(hidden_high)
         model.zero_grad()
-        output, hidden_low, hidden_high = model(data, hidden_low, hidden_high)
+        output, hiddens = model(data, (hidden_low, hidden_high))
+	hidden_low, hidden_high = hiddens
         loss = args.batch_size * corpus.train_maxlen * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
+	'''
+	print "DATA:", data
+	print "OUTPUT:", output
+	print "ZEROS:", torch.nonzero(output)
+	if (loss.data == float("inf")).all():
+		print output
+	'''
+	print "LOSS:", loss
         loss.backward()
 
 	'''
@@ -179,7 +188,6 @@ best_val_loss = None
 # At any point you can hit Ctrl + C to break out of training early.
 try:
     for epoch in range(1, args.epochs+1):
-	print epoch
         epoch_start_time = time.time()
         train()
         val_loss = evaluate(val_data, val_masks, corpus.valid_maxlen)
