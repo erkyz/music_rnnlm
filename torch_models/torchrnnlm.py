@@ -14,7 +14,6 @@ class RNNModel(nn.Module):
         super(RNNModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
-        # Choose attention model
         if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers, dropout=dropout)
         else:
@@ -53,6 +52,62 @@ class RNNModel(nn.Module):
                     Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()))
         else:
             return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
+
+
+class RNNCellModel(nn.Module):
+    """Container module with an encoder, a recurrent module, and a decoder."""
+
+    def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.1, attention=False):
+	"""
+	ninp = size of input embedding
+	"""
+        super(RNNCellModel, self).__init__()
+        self.drop = nn.Dropout(dropout)
+        self.encoder = nn.Embedding(ntoken, ninp)
+        if rnn_type in ['LSTMCell', 'GRUCell']:
+            self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers)
+        '''
+        else:
+            try:
+                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
+            except KeyError:
+                raise ValueError( """An invalid option for `--model` was supplied,
+                                 options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
+            self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+        '''
+        self.decoder = nn.Linear(nhid, ntoken)
+
+        self.init_weights()
+
+        self.rnn_type = rnn_type
+        self.nhid = nhid
+        self.nlayers = nlayers
+
+    def init_weights(self):
+        initrange = 0.1
+        self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.uniform_(-initrange, initrange)
+
+    def forward(self, input, hidden):
+        outputs = []
+        emb = self.drop(self.encoder(input))
+        for i, emb_t in enumerate(emb.chunk(emb.size(1), dim=1)):
+            h_t, c_t = self.rnn(emb_t, (h_t, c_t))
+            outputs += [h_t]
+        output = self.drop(output)
+
+        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
+        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
+
+    def init_hidden(self, bsz):
+        weight = next(self.parameters()).data
+        if self.rnn_type == 'LSTMCell':
+            return (Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()),
+                    Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()))
+        else:
+            return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
+
 
 class RNNModelNoEnc(nn.Module):
     """Container module with a recurrent module, and a decoder."""

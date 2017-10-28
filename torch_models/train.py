@@ -94,7 +94,8 @@ ntokens = sv.size
 if args.attention:
     model = attention_rnnlm.AttentionDecoderRNN(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 else:
-    model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+#     model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+     model = torchrnnlm.RNNCellModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 if args.cuda:
     model.cuda()
 
