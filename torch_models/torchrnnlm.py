@@ -111,15 +111,17 @@ class HRNNModel(nn.Module):
         self.low = RNNModel(rnn_type, ntoken, ninp, nhid, nlayers, dropout)
         self.high = RNNModelNoEnc(rnn_type, nhid, nhid, nlayers, dropout) 
 
-    def train(self, is_test=False):
-	super(HRNNModel, self).train(is_test)
-	self.low.train(is_test)
-	self.high.train(is_test)
+    '''
+    def train(self, backprop=True):
+	super(HRNNModel, self).train(backprop)
+	self.low.train(backprop)
+	self.high.train(backprop)
 
     def zero_grad(self):
 	super(HRNNModel, self).zero_grad()
 	self.low.zero_grad()
 	self.high.zero_grad()
+    '''
 
     # TODO Better to just loop.
     # TODO Which in the tuple from an LSTM should you get?

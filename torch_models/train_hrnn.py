@@ -128,9 +128,11 @@ def evaluate(data_source, data_masks, bptt):
     for i in range(0, data_source.size(0) - 1, bptt):
         data, targets = get_batch(data_source, i, bptt, evaluation=True)
         masks, _ = get_batch(data_masks, i, bptt, evaluation=True)
-        output, hidden = model(data, hidden)
+        output, hiddens = model(data, (hidden_low, hidden_high))
+	hidden_low, hidden_high = hiddens
         total_loss += len(data) * eval_batch_size * bptt * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
-        hidden = repackage_hidden(hidden)
+        hidden_low = repackage_hidden(hidden_low)
+        hidden_high = repackage_hidden(hidden_high)
     return total_loss.data[0] / len(data_source)
 
 
@@ -159,15 +161,14 @@ def train():
 	if (loss.data == float("inf")).all():
 		print output
 	'''
-	print "LOSS:", loss
         loss.backward()
 
 	'''
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
+	'''
         for p in model.parameters():
             p.data.add_(-lr, p.grad.data)
-	'''
 
         total_loss += loss.data
 
