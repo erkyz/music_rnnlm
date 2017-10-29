@@ -94,8 +94,8 @@ ntokens = sv.size
 if args.attention:
     model = attention_rnnlm.AttentionDecoderRNN(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 else:
-#     model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
-     model = torchrnnlm.RNNCellModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+     model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+#     model = torchrnnlm.RNNCellModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 if args.cuda:
     model.cuda()
 
@@ -142,12 +142,14 @@ def train():
     start_time = time.time()
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
+    print train_data.size(0) - 1
     for batch, i in enumerate(range(0, train_data.size(0) - 1, corpus.train_maxlen)):
         data, targets = get_batch(train_data, i, corpus.train_maxlen)
         masks, _ = get_batch(train_masks, i, corpus.train_maxlen)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
+	print "data size", data.size()
         model.zero_grad()
         output, hidden = model(data, hidden)
         loss = args.batch_size * corpus.train_maxlen * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)

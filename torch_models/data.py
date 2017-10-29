@@ -7,7 +7,7 @@ import pickle
 MAX_ALLOWED_MULTIPLIER = 2
 
 class Corpus(object):
-    def __init__(self, path, dictionary, save_fname):
+    def __init__(self, path, dictionary):
         self.dictionary  = dictionary
         self.train, self.train_masks, self.train_maxlen = \
                 self.eventize(os.path.join(path, 'train'))
