@@ -64,7 +64,7 @@ class RNNCellModel(nn.Module):
         super(RNNCellModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
-        if rnn_type in ['LSTMCell', 'GRUCell']:
+        if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers)
         '''
         else:
