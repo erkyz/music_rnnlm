@@ -64,8 +64,8 @@ class RNNCellModel(nn.Module):
         super(RNNCellModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
-        if rnn_type in ['LSTMCell', 'GRUCell']:
-            self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers)
+        if rnn_type in ['LSTM', 'GRU']:
+            self.rnn = getattr(nn, rnn_type + "Cell")(ninp, nhid, nlayers)
         '''
         else:
             try:
@@ -90,23 +90,27 @@ class RNNCellModel(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
+	print "input size to forward", input.size()
         outputs = []
+	h_t, c_t = hidden
+	print h_t.size(), c_t.size()
         emb = self.drop(self.encoder(input))
         for i, emb_t in enumerate(emb.chunk(emb.size(1), dim=1)):
+	    print "emb_t size", emb_t.size()
             h_t, c_t = self.rnn(emb_t, (h_t, c_t))
             outputs += [h_t]
         output = self.drop(output)
 
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
+        return decoded.view(output.size(0), output.size(1), decoded.size(1)), (h_t, c_t)
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
-        if self.rnn_type == 'LSTMCell':
-            return (Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()),
-                    Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()))
+        if self.rnn_type == 'LSTM':
+            return (Variable(weight.new(bsz, self.nhid).zero_()),
+                    Variable(weight.new(bsz, self.nhid).zero_()))
         else:
-            return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
+            return Variable(weight.new(bsz, self.nhid).zero_())
 
 
 class RNNModelNoEnc(nn.Module):
