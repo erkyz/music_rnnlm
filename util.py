@@ -108,8 +108,6 @@ class SimpleVocab(object):
         self.tuples = set([])
         self.i2e = defaultdict(PitchDurationEvent.not_found)
         self.tup2e = defaultdict(PitchDurationEvent.not_found)
-        self.tup2i = defaultdict(None)
-        self.e2i = defaultdict(None)
         self.special_events = {
                 "start": self.add_event_tuple(START_OF_TRACK),
                 "end": self.add_event_tuple(END_OF_TRACK),
@@ -132,8 +130,6 @@ class SimpleVocab(object):
         e = PitchDurationEvent(i, pitch, duration)
         self.i2e[i] = e
         self.tup2e[(pitch,duration)] = e
-        self.e2i[e] = i
-        self.tup2i[(pitch,duration)] = i
         self.events.add(e)
         self.tuples.add((pitch,duration))
         return e
@@ -168,8 +164,6 @@ class SimpleVocab(object):
                 "tuples": self.tuples,
                 "i2e": dict(self.i2e),
                 "tup2e": dict(self.tup2e),
-                "tup2i": dict(self.tup2i),
-                "e2i": dict(self.e2i),
                 "special_events": self.special_events,
                 }
         with open(filename, "w") as f: pickle.dump(info_dict, f)
@@ -183,8 +177,6 @@ class SimpleVocab(object):
             v.tuples = info_dict["tuples"]
             v.i2e = defaultdict(PitchDurationEvent.not_found, info_dict["i2e"])
             v.tup2e = defaultdict(PitchDurationEvent.not_found, info_dict["tup2e"])
-            v.tup2i = defaultdict(None, info_dict["tup2i"])
-            v.e2i = defaultdict(None, info_dict["e2i"])
             v.special_events = info_dict["special_events"]
             print "Vocab size:", v.size
             return v

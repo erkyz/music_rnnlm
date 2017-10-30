@@ -65,36 +65,16 @@ if torch.cuda.is_available():
 
 sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
 corpus = data.Corpus(args.data, sv)
-
-def batchify(data, bsz):
-    # Work out how cleanly we can divide the dataset into bsz parts.
-    nbatch = data.size(0) // bsz
-    # Trim off any extra elements that wouldn't cleanly fit (remainders).
-    data = data.narrow(0, 0, nbatch * bsz)
-    # Evenly divide the data across the bsz batches.
-    data = data.view(bsz, -1).t().contiguous()
-    if args.cuda:
-        data = data.cuda()
-    return data
-
-eval_batch_size = 10
-
-train_data = batchify(corpus.train, args.batch_size)
-val_data = batchify(corpus.valid, eval_batch_size)
-test_data = batchify(corpus.test, eval_batch_size)
-train_masks = batchify(corpus.train_masks, args.batch_size)
-val_masks = batchify(corpus.valid_masks, eval_batch_size)
-test_masks = batchify(corpus.test_masks, eval_batch_size)
+train_mb_indices = range(0, len(corpus.train), args.batch_size)
+valid_mb_indices = range(0, len(corpus.valid), args.batch_size)
+test_mb_indices = range(0, len(corpus.test), args.batch_size)
 
 ###############################################################################
 # Build the model
 ###############################################################################
 
 ntokens = sv.size
-if args.attention:
-    model = attention_rnnlm.AttentionDecoderRNN(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
-else:
-     model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 #     model = torchrnnlm.RNNCellModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
 if args.cuda:
     model.cuda()
@@ -113,12 +93,17 @@ def repackage_hidden(h):
         return tuple(repackage_hidden(v) for v in h)
 
 
-def get_batch(source, i, seq_len, evaluation=False):
-    this_seq_len = min(seq_len, len(source) - 1 - i)
-    data = Variable(source[i:i+this_seq_len], volatile=evaluation)
-    target = Variable(source[i+1:i+1+this_seq_len].view(-1))
+def get_batch(source, start_idx, bsz, evaluation=False):
+    this_bsz = min(bsz, len(source) - start_idx - 1)
+    batch = source[start_idx, start_idx+this_bsz]
+    targets = source[start_idx+1, start_idx+1+this_bsz]
+    seq_lens = [len(s) for s in batch]
+    target_seq_lens = [len(s) for s in targets]
+    data = torch.nn.utils.rnn.pack_padded_sequence(Variable(batch_list, volatile=evaluation),
+            seq_lens, batch_first=True)
+    target = torch.nn.utils.rnn.pack_padded_sequence(Variable(batch_list, volatile=evaluation),
+            seq_lens, batch_first=True)
     return data, target
-
 
 def evaluate(data_source, data_masks, bptt):
     # Turn on evaluation mode which disables dropout.
@@ -142,17 +127,15 @@ def train():
     start_time = time.time()
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
-    print train_data.size(0) - 1
-    for batch, i in enumerate(range(0, train_data.size(0) - 1, corpus.train_maxlen)):
-        data, targets = get_batch(train_data, i, corpus.train_maxlen)
-        masks, _ = get_batch(train_masks, i, corpus.train_maxlen)
+    random.shuffle(train_mb_indices)
+    for batch_start_idx in train_mb_indices:
+        data, targets = get_batch(train_data, batch_start_idx)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
-	print "data size", data.size()
         model.zero_grad()
         output, hidden = model(data, hidden)
-        loss = args.batch_size * corpus.train_maxlen * criterion(output.view(-1, ntokens), targets) / masks.view(-1).sum(-1)
+        loss = criterion(output.view(-1, ntokens), targets)
         loss.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
