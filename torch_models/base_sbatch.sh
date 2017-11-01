@@ -25,7 +25,9 @@ export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
  
-python train.py --cuda --save="../tmp/base.pt"
-# python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" 
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=200 --arch="hrnn"
+python generate.py --cuda --outf="hrnn" --checkpoint="../tmp/hrnn.pt" --num_out=30
 
+python train.py --cuda --save="../tmp/base.pt" --epochs=200 --arch="base"
+python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" --num_out=30
 

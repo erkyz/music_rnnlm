@@ -4,6 +4,7 @@ import numpy as np
 from glob import glob
 from collections import defaultdict
 
+PADDING = (0,-1)
 START_OF_TRACK = (-1,-1)
 END_OF_TRACK = (-2,-1)
 MEASURE = (-3,-1)
@@ -89,6 +90,7 @@ def mid2tuples(f):
     out = [START_OF_TRACK]
     measure_progress = 0
     for i in range(int(len(top_melody)/2)):
+	# TODO fix overshooting on ties.
         if measure_progress > NUM_SPLIT * bpm:
             out.append(MEASURE)
             measure_progress = 0
@@ -109,6 +111,7 @@ class SimpleVocab(object):
         self.i2e = defaultdict(PitchDurationEvent.not_found)
         self.tup2e = defaultdict(PitchDurationEvent.not_found)
         self.special_events = {
+                "padding": self.add_event_tuple(PADDING),
                 "start": self.add_event_tuple(START_OF_TRACK),
                 "end": self.add_event_tuple(END_OF_TRACK),
                 "measure": self.add_event_tuple(MEASURE),
@@ -183,6 +186,7 @@ class SimpleVocab(object):
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):
+	print vocab_fname
         if os.path.isfile(vocab_fname):
             return SimpleVocab.load(vocab_fname)
         v = SimpleVocab()

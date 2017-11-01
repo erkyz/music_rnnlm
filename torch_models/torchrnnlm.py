@@ -8,9 +8,6 @@ class RNNModel(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.1, attention=False):
-	"""
-	ninp = size of input embedding
-	"""
         super(RNNModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
@@ -38,9 +35,11 @@ class RNNModel(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
-        emb = self.drop(self.encoder(input))
+        emb = self.drop(self.encoder(torch.t(input)))
+        # packed_input = torch.nn.utils.rnn.pack_padded_sequence(emb, seq_lens, batch_first=True)
         output, hidden = self.rnn(emb, hidden)
-        output = self.drop(output)
+        # output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
+        output = self.drop(torch.transpose(output, 0, 1))
 
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden
@@ -53,19 +52,17 @@ class RNNModel(nn.Module):
         else:
             return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
 
-
 class RNNCellModel(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
+    """One layer only."""
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.1, attention=False):
-	"""
-	ninp = size of input embedding
-	"""
         super(RNNCellModel, self).__init__()
         self.drop = nn.Dropout(dropout)
         self.encoder = nn.Embedding(ntoken, ninp)
         if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type + "Cell")(ninp, nhid, nlayers)
+            print self.rnn
         '''
         else:
             try:
@@ -90,15 +87,13 @@ class RNNCellModel(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
-	print "input size to forward", input.size()
-        outputs = []
-	h_t, c_t = hidden
-	print h_t.size(), c_t.size()
+        output = []
+        h_t, c_t = hidden
         emb = self.drop(self.encoder(input))
         for i, emb_t in enumerate(emb.chunk(emb.size(1), dim=1)):
-	    print "emb_t size", emb_t.size()
             h_t, c_t = self.rnn(emb_t, (h_t, c_t))
-            outputs += [h_t]
+            output += [h_t]
+        output = torch.stack(output, 1).squeeze(2)
         output = self.drop(output)
 
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
@@ -114,7 +109,7 @@ class RNNCellModel(nn.Module):
 
 
 class RNNModelNoEnc(nn.Module):
-    """Container module with a recurrent module, and a decoder."""
+    """Container module with a recurrent module, and a decoder (no embedding)"""
 
     def __init__(self, rnn_type, ntoken, nhid, nlayers, dropout=0.1, attention=False):
         super(RNNModelNoEnc, self).__init__()
@@ -157,62 +152,66 @@ class RNNModelNoEnc(nn.Module):
         else:
             return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
 
+# TODO pass vocab
+MEASURE_TOKEN_IDX = 3
 
 
 class HRNNModel(nn.Module):
     """Hierarchical LSTM"""
-    '''MUST take batch size of one, one layer (for now)'''
     # TODO different hyperparams (esp learning rate), type of model
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers=1, dropout=0.1):
         super(HRNNModel, self).__init__()
-	nlayers = 1
-        self.low = RNNModel(rnn_type, ntoken, ninp, nhid, nlayers, dropout)
-        self.high = RNNModelNoEnc(rnn_type, nhid, nhid, nlayers, dropout) 
+        self.drop = nn.Dropout(dropout)
+        self.encoder = nn.Embedding(ntoken, ninp)
+        if rnn_type in ['LSTM', 'GRU']:
+            # TODO sum
+            self.low = getattr(nn, rnn_type+'Cell')(ninp+nhid, nhid, nlayers)
+            self.high = getattr(nn, rnn_type+'Cell')(ninp, nhid, nlayers)
+        self.decoder = nn.Linear(nhid, ntoken)
+        self.init_weights()
 
-    '''
-    def train(self, backprop=True):
-	super(HRNNModel, self).train(backprop)
-	self.low.train(backprop)
-	self.high.train(backprop)
+        self.rnn_type = rnn_type
+        self.nhid = nhid
+        self.nlayers = nlayers
 
-    def zero_grad(self):
-	super(HRNNModel, self).zero_grad()
-	self.low.zero_grad()
-	self.high.zero_grad()
-    '''
-
-    # TODO Better to just loop.
-    # TODO Which in the tuple from an LSTM should you get?
-    # Dude this is a computation graph, everything needs to be an op.
-    def forward_recurse(self, inp, hidden_low, hidden_high):
-	# new measure
-	if (inp.size()[0] == 1):
-	    step_inp = inp.narrow(0, 0, 1) 
-            step_out, _ = self.low(step_inp, hidden_low)
-	    return step_out
-        if (inp[0].data == 2).all():
-            hidden_low_one, hidden_high = self.high(hidden_low[0].view(1,1,-1), hidden_high)
-	    hidden_low = (hidden_low_one, hidden_low[1])
-        
-	step_inp = inp.narrow(0, 0, 1)
-        step_out, hidden_low = self.low(step_inp, hidden_low)
-        next_inp = inp.narrow(0, 1, inp.size()[0]-1)
-        return torch.cat((step_out, self.forward_recurse(next_inp, hidden_low, hidden_high)))
+    def init_weights(self):
+        initrange = 0.1
+        self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hiddens):
-	hidden_low, hidden_high = hiddens
-	'''
-	out = []
-	for i in range(input.size()[0]):
-	    step_inp = inp.narrow(0, i, i+1) 
-     	    step_out, hidden_low = self.low(step_inp, hidden_low)
-	    out.append(step_out)
-	return torch.LongTensor(out)
-	'''
+        output = []
+        hidden_low, hidden_high = hiddens
+        h_low_t, c_low_t = hidden_low
+        h_high_t, c_high_t = hidden_high
+        for i, x_t in enumerate(input.chunk(input.size(1), dim=1)):
+            # this is going to be slow.
+            filter_t = Variable((x_t.data == MEASURE_TOKEN_IDX).expand(
+                x_t.size(0), h_high_t.size(1)).type(torch.cuda.FloatTensor))
+            emb_t = self.drop(self.encoder(x_t))
+            inp_t = torch.cat([emb_t, h_high_t.view(x_t.size(0),1,-1)], 2)
+            h_low_t, c_low_t = self.low(inp_t, (h_low_t, c_low_t))
+            h_high_tmp, c_high_tmp = self.high(h_low_t, (h_high_t, c_low_t))
+            h_high_t = torch.mul(filter_t, h_high_tmp) + torch.mul(1-filter_t, h_high_t)
+            c_high_t = torch.mul(filter_t, c_high_tmp) + torch.mul(1-filter_t, c_high_t)
+            output += [h_low_t]
+        output = torch.stack(output, 1).squeeze(2)
+        output = self.drop(output)
 
-        return self.forward_recurse(input, hidden_low, hidden_high), (hidden_low, hidden_high)
+        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
+        return decoded.view(output.size(0), output.size(1), decoded.size(1)), \
+            ((h_low_t, c_low_t), (h_high_t, c_high_t))
 
+    
+    # returns tuple for hidden states of low and high LSTMs
     def init_hidden(self, bsz):
-        return self.low.init_hidden(bsz), self.high.init_hidden(bsz)
+        weight = next(self.parameters()).data
+        if self.rnn_type == 'LSTM':
+            return ((Variable(weight.new(bsz, self.nhid).zero_()),
+                    Variable(weight.new(bsz, self.nhid).zero_())),
+                    (Variable(weight.new(bsz, self.nhid).zero_()),
+                    Variable(weight.new(bsz, self.nhid).zero_())))
+
 
