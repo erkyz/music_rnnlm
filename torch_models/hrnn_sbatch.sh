@@ -24,7 +24,16 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-python train_hrnn.py --cuda --save="../tmp/hrnn.pt"
-# python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" 
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
+# python generate.py --cuda --outf="hrnn" --checkpoint="../tmp/hrnn.pt" --num_out=30
 
 

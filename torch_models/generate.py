@@ -53,8 +53,8 @@ else:
 sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
 ntokens = len(sv)
 hidden = model.init_hidden(1)
-# Input should be START token, which is always zero.
-input = Variable(torch.FloatTensor(1, 1).zero_().long(), volatile=True)
+# Input should be START token
+input = Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)
 if args.cuda:
     input.data = input.data.cuda()
 
@@ -67,7 +67,7 @@ for i in range(args.num_out):
 	    input.data.fill_(word_idx)
 	    curr = sv[word_idx]
 	    events.append(curr)
-	    if curr == sv[sv.special_events["end"]].i: break
+	    if curr == sv.special_events["end"].i: break
 
 	sv.list2mid(events, "../../generated/" + args.outf + str(i) + '.mid')
 

@@ -90,10 +90,9 @@ def mid2tuples(f):
     out = [START_OF_TRACK]
     measure_progress = 0
     for i in range(int(len(top_melody)/2)):
-	# TODO fix overshooting on ties.
-        if measure_progress > NUM_SPLIT * bpm:
+        if measure_progress >= NUM_SPLIT * bpm:
             out.append(MEASURE)
-            measure_progress = 0
+            measure_progress = measure_progress - (NUM_SPLIT * bpm)
         on = top_melody[2*i]
         off = top_melody[2*i+1]
         on = quantize(on, resolution)
