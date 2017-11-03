@@ -28,6 +28,10 @@ parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='reporting interval')
+parser.add_argument('--condition_piece', type=str,
+                    help='midi piece to condition on')
+parser.add_argument('--condition_measures', type=int, default=2,
+                    help='number of bars to condition the generation on')
 args = parser.parse_args()
 
 # Set the random seed manually for reproducibility.
@@ -54,7 +58,23 @@ sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
 ntokens = len(sv)
 hidden = model.init_hidden(1)
 # Input should be START token
-input = Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)
+if args.condition_piece != "":
+    with open(args.condition_piece) as f:
+        tuples = util.mid2tuples(f)
+    curr_measure = 0
+    events = []
+    for tup in events:
+        event = sv[tup]
+        events += event
+        if event == sv.special_events["measure"]:
+            curr_measure += 1
+        if curr_measure == args.condition_measure:
+            break
+    input = Variable(torch.LongTensor(events, volatile=True)
+    num_conditioned = len(events)
+else:
+    input = Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)
+    num_conditioned = 0
 if args.cuda:
     input.data = input.data.cuda()
 
@@ -64,8 +84,7 @@ for i in range(args.num_out):
 	    output, hidden = model(input, hidden)
 	    word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
 	    word_idx = torch.multinomial(word_weights, 1)[0]
-	    input.data.fill_(word_idx)
-	    curr = sv[word_idx]
+    	    input.data.fill_(word_idx)
 	    events.append(curr)
 	    if curr == sv.special_events["end"].i: break
 
