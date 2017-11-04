@@ -20,10 +20,9 @@ class Corpus(object):
         melodies = []
         for f in util.getmidfiles(path):
             melody = util.mid2tuples(f)
-        melodies.append([self.vocab.tup2e[tup].i for tup in melody])
-        maxlen = max(len(melody), maxlen)
+            melodies.append([self.vocab.tup2e[tup].i for tup in melody])
+            maxlen = max(len(melody), maxlen)
         
-        ids = torch.LongTensor(len(melodies) * maxlen)
         melodies.sort(key=lambda x: -len(x))
         return melodies
 

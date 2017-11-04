@@ -9,13 +9,13 @@ import data, util
 parser = argparse.ArgumentParser()
 
 # Model parameters.
-parser.add_argument('--data', type=str, default='../music_data/Nottingham/',
+parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
 parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
-parser.add_argument('--max_events', type=int, default='200',
+parser.add_argument('--max_events', type=int, default='500',
                     help='number of words to generate')
 parser.add_argument('--num_out', type=int, default='10',
                     help='number of melodies to generate')
@@ -74,8 +74,7 @@ def get_events(condition_piece, cuda, sv):
         input.data = input.data.cuda()
     return input, events
 
-
-sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
+sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/cmaj_nott_sv.p")
 ntokens = len(sv)
 
 for i in range(args.num_out):

@@ -82,10 +82,10 @@ def mid2tuples(f):
         return []
     top_melody = []
     bpm = 4
-    for e in pattern[1]:
-        if type(e) is midi.SetTempoEvent:
-            bpm = e.get_bpm()
-            print bpm
+    # TODO get the ith pattern NON-STUPIDLY
+    for e in pattern[0]:
+        # if type(e) is midi.SetTempoEvent:
+            # bpm = e.get_bpm()
         if type(e) is midi.NoteOnEvent or type(e) is midi.NoteOffEvent:
             top_melody.append(e)
     out = [START_OF_TRACK]

@@ -149,7 +149,6 @@ def evaluate(data_source, data_targets, mb_indices):
         output, hidden = model(data, hidden)
         total_loss += criterion(output.view(-1, ntokens), targets).data 
         hidden = repackage_hidden(hidden)
-    print total_loss
     return total_loss[0] / len(data_source) # num batches
 
 
