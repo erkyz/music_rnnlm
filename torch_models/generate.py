@@ -1,9 +1,8 @@
-import argparse
-
 import torch
 from torch.autograd import Variable
 
 import sys, os
+import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import data, util
 
@@ -28,9 +27,9 @@ parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='reporting interval')
-parser.add_argument('--condition_piece', type=str,
+parser.add_argument('--condition_piece', type=str, default="",
                     help='midi piece to condition on')
-parser.add_argument('--condition_measures', type=int, default=2,
+parser.add_argument('--condition_measures', type=int, default=0,
                     help='number of bars to condition the generation on')
 args = parser.parse_args()
 
@@ -54,40 +53,49 @@ if args.cuda:
 else:
     model.cpu()
 
+def get_events(condition_piece, cuda, sv):
+    events = []
+    if args.condition_piece != "":
+        with open(args.condition_piece) as f:
+            tuples = util.mid2tuples(f)
+        curr_measure = 0
+        for tup in tuples:
+            event = sv[tup]
+            events.append(event.i)
+            if event == sv.special_events["measure"]:
+                curr_measure += 1
+            if curr_measure == args.condition_measures:
+                break
+        input = Variable(torch.LongTensor(events).view(1,-1), volatile=True)
+    else:
+        # Input should be START token
+        input = Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)
+    if args.cuda:
+        input.data = input.data.cuda()
+    return input, events
+
+
 sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
 ntokens = len(sv)
-hidden = model.init_hidden(1)
-# Input should be START token
-if args.condition_piece != "":
-    with open(args.condition_piece) as f:
-        tuples = util.mid2tuples(f)
-    curr_measure = 0
-    events = []
-    for tup in events:
-        event = sv[tup]
-        events += event
-        if event == sv.special_events["measure"]:
-            curr_measure += 1
-        if curr_measure == args.condition_measure:
-            break
-    input = Variable(torch.LongTensor(events, volatile=True)
-    num_conditioned = len(events)
-else:
-    input = Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)
-    num_conditioned = 0
-if args.cuda:
-    input.data = input.data.cuda()
 
 for i in range(args.num_out):
-	events = []
-	while len(events) < args.max_events:
-	    output, hidden = model(input, hidden)
-	    word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
-	    word_idx = torch.multinomial(word_weights, 1)[0]
-    	    input.data.fill_(word_idx)
-	    events.append(curr)
-	    if curr == sv.special_events["end"].i: break
-
-	sv.list2mid(events, "../../generated/" + args.outf + str(i) + '.mid')
+    hidden = model.init_hidden(1) # batch size of 1
+    torch.manual_seed(i)
+    if torch.cuda.is_available():
+        if not args.cuda:
+            print("WARNING: You have a CUDA device, so you should probably run with --cuda")
+        else:
+            torch.cuda.manual_seed(i)
+    gen_input, generated_events = get_events(args.condition_piece, args.cuda, sv)
+    while len(generated_events) < args.max_events:
+        output, hidden = model(gen_input, hidden)
+        output = output[0][-1].view((1,1,-1))
+        word_weights = output.squeeze().data.div(args.temperature).exp().cpu()
+        word_idx = torch.multinomial(word_weights, 1)[0]
+        gen_input.data.fill_(word_idx)
+        curr = sv[word_idx]
+        generated_events.append(curr)
+        if curr == sv.special_events["end"].i: break
+    sv.list2mid(generated_events, "../../generated/" + args.outf + str(i) + '.mid')
 
 

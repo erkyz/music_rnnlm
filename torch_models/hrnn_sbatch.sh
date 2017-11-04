@@ -24,16 +24,6 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-python train.py --cuda --save="../tmp/hrnn.pt" --epochs=60 --arch="hrnn"
-# python generate.py --cuda --outf="hrnn" --checkpoint="../tmp/hrnn.pt" --num_out=30
-
+python train.py --cuda --save="../tmp/hrnn.pt" --epochs=100 --arch="hrnn"
+python generate.py --cuda --outf="condhrnn" --checkpoint="../tmp/hrnn.pt" --num_out=5 --condition_piece="../music_data/CMaj_Nottingham/CMaj_valid/CMaj_hpps_simple_chords_16.mid" --condition_measures=4
 

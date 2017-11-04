@@ -15,7 +15,7 @@ import util
 
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
-parser.add_argument('--data', type=str, default='../music_data/Nottingham/',
+parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--model', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
@@ -26,7 +26,7 @@ parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=10,
+parser.add_argument('--lr', type=float, default=5,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -77,11 +77,11 @@ def get_batch(source, batch, bsz):
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for i in range(this_bsz):
-	data[i] = pad(torch.LongTensor(source_slice[i]), maxlen) 
-	target[i] = pad(torch.LongTensor(target_slice[i]), maxlen)
+        data[i] = pad(torch.LongTensor(source_slice[i]), maxlen) 
+        target[i] = pad(torch.LongTensor(target_slice[i]), maxlen)
     if args.cuda: 
-	data = data.cuda()
-	target = target.cuda()
+        data = data.cuda()
+        target = target.cuda()
     return data, target.view(-1)
 
 def batchify(source, bsz):
@@ -89,12 +89,12 @@ def batchify(source, bsz):
     batches = []
     targets = []
     for batch in range(len(source)/bsz):
-	data, target = get_batch(source, batch, bsz)
+        data, target = get_batch(source, batch, bsz)
         batches.append(data)
-	targets.append(target)
+        targets.append(target)
     return batches, targets
-
-sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/nott_sv.p")
+    
+sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/cmaj_nott_sv.p")
 corpus = data.Corpus(args.data, sv, args.cuda)
 train_batches, train_targets = batchify(corpus.train, args.batch_size)
 valid_batches, valid_targets = batchify(corpus.valid, args.batch_size)
@@ -138,25 +138,6 @@ def get_batch_variable(batches, targets, batch, evaluation=False):
     seq_lens = [torch.nonzero(data[i]).size(0) for i in range(data.size(0))] 
     return Variable(data, volatile=evaluation), Variable(target), seq_lens
 
-    '''
-    start_idx = batch * bsz
-    this_bsz = min(bsz, int((len(source) - start_idx - 1) / max_seqlen))
-    source_slice = source[start_idx:start_idx+this_bsz*batch_len].view(this_bsz,-1)
-    max_seqlen = max([torch.nonzero(source_slice[i].data).size(0) for i in range(this_bsz)])
-    target_slice = source[start_idx+1:start_idx+1+this_bsz*batch_len].view(-1)
-    if this_bsz < bsz:
-        source_padding = torch.LongTensor(max_seqlen, bsz-this_bsz).zero_()
-        target_padding = torch.LongTensor(max_seqlen*(bsz-this_bsz)).zero_()
-	if args.cuda:
-	    source_padding = source_padding.cuda()
-	    target_padding = target_padding.cuda()
-	source_slice = torch.cat((source_slice, source_padding), dim=1)
-	target_slice = torch.cat((target_slice, target_padding))
-    data = Variable(source_slice, volatile=evaluation)
-    target = Variable(target_slice)
-    return data, target
-    '''
-
 def evaluate(data_source, data_targets, mb_indices):
     # Turn on evaluation mode which disables dropout.
     model.eval()
@@ -168,6 +149,7 @@ def evaluate(data_source, data_targets, mb_indices):
         output, hidden = model(data, hidden)
         total_loss += criterion(output.view(-1, ntokens), targets).data 
         hidden = repackage_hidden(hidden)
+    print total_loss
     return total_loss[0] / len(data_source) # num batches
 
 

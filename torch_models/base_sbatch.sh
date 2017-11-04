@@ -24,15 +24,6 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-python train.py --cuda --save="../tmp/base.pt" --epochs=60 --arch="base"
-# python generate.py --cuda --outf="base" --checkpoint="../tmp/base.pt" --num_out=30
+python train.py --cuda --save="../tmp/base.pt" --epochs=100 
+python generate.py --cuda --outf="condbase" --checkpoint="../tmp/base.pt" --num_out=5 --condition_piece="../music_data/CMaj_Nottingham/CMaj_valid/CMaj_hpps_simple_chords_16.mid" --condition_measures=4
 

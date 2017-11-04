@@ -1,5 +1,5 @@
-
 import pickle, midi, math, os
+import music21
 import numpy as np
 from glob import glob
 from collections import defaultdict
@@ -85,6 +85,7 @@ def mid2tuples(f):
     for e in pattern[1]:
         if type(e) is midi.SetTempoEvent:
             bpm = e.get_bpm()
+            print bpm
         if type(e) is midi.NoteOnEvent or type(e) is midi.NoteOffEvent:
             top_melody.append(e)
     out = [START_OF_TRACK]
@@ -119,7 +120,7 @@ class SimpleVocab(object):
       
     @property
     def size(self):
-	return len(self.events)
+        return len(self.events)
 
     def __len__(self):
         return len(self.events)
@@ -185,17 +186,16 @@ class SimpleVocab(object):
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):
-	print vocab_fname
         if os.path.isfile(vocab_fname):
             return SimpleVocab.load(vocab_fname)
         v = SimpleVocab()
-	filenames = getmidfiles(path) 
+        filenames = getmidfiles(path) 
         for filename in filenames:
             with open(filename) as f:
-		events = mid2tuples(f)
-		for pitch, duration in events:
-		    v.add_event_tuple((pitch, duration))
+                events = mid2tuples(f)
+            for pitch, duration in events:
+                v.add_event_tuple((pitch, duration))
         print "Vocab size:", v.size
         v.save(vocab_fname)
         return v
-
+    
