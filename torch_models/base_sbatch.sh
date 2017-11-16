@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 10
 #SBATCH --gres=gpu:1
-#SBATCH --mem=10g
+#SBATCH --mem=15g
 #SBATCH -t 0
 #SBATCH -o ../../slurm-out/base_torch.txt
 
@@ -24,6 +23,9 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-python train.py --cuda --save="../tmp/base.pt" --epochs=100 
-python generate.py --cuda --outf="condbase" --checkpoint="../tmp/base.pt" --num_out=5 --condition_piece="../music_data/CMaj_Nottingham/CMaj_valid/CMaj_hpps_simple_chords_16.mid" --condition_measures=4
-
+FILE_NAME="../tmp/base.pt"
+VOCABF="../tmp/cmaj_nott_sv"
+CORPUSF="../tmp/cmaj_nott_sv_corpus"
+CONDITION_MEASURES=0
+# python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data="../music_data/CMaj_Nottingham/" --vocabf=$VOCABF --corpusf=$CORPUSF --factorize --emsize=10 --batch_size=64 --progress_tokens
+python generate.py --cuda --outf="condbase" --checkpoint=$FILE_NAME --vocabf=$VOCABF --corpusf=$CORPUSF --num_out=10 --condition_piece="../music_data/CMaj_Nottingham/valid/jigs_simple_chords_16.mid" --condition_measures=$CONDITION_MEASURES --progress_tokens --factorize

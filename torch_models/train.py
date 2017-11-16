@@ -1,4 +1,3 @@
-
 import torch
 import argparse
 import time
@@ -9,7 +8,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import torchrnnlm
+import rnnlm, hrnnlm
 import data
 import util
 
@@ -17,16 +16,20 @@ parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Mod
 
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
+parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
+                    help='location of the saved vocabulary, or where to save it')
+parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
+                    help='location of the saved corpus, or where to save it')
 parser.add_argument('--model', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--arch', type=str, default='base')
-parser.add_argument('--emsize', type=int, default=200,
+parser.add_argument('--emsize', type=int, default=100,
                     help='size of word embeddings')
 parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=5,
+parser.add_argument('--lr', type=float, default=10,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -40,6 +43,11 @@ parser.add_argument('--tied', action='store_true',
                     help='tie the word embedding and softmax weights')
 parser.add_argument('--attention', action='store_true',
                     help='batch size')
+parser.add_argument('--factorize', action='store_true',
+                    help='whether to factorize embeddings')
+parser.add_argument('--progress_tokens', action='store_true',
+                    help='whether to condition on the amount of time left until the end \
+                            of the measure')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
@@ -71,7 +79,6 @@ def get_batch(source, batch, bsz):
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx - 1))
     source_slice = source[start_idx:start_idx+this_bsz]
-    # last element of target is wrong.
     target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
     maxlen = len(source_slice[0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
@@ -85,34 +92,53 @@ def get_batch(source, batch, bsz):
     return data, target.view(-1)
 
 def batchify(source, bsz):
-    """ Returns two lists of Tensors """
+    """ Returns two lists """
     batches = []
     targets = []
-    for batch in range(len(source)/bsz):
-        data, target = get_batch(source, batch, bsz)
-        batches.append(data)
-        targets.append(target)
+    for channel in range(len(source)):
+        channel_batches = []
+        channel_targets = []
+        for batch in range(len(source[channel])/bsz):
+            data, target = get_batch(source[channel], batch, bsz)
+            channel_batches.append(data)
+            channel_targets.append(target)
+        batches.append(channel_batches)
+        targets.append(channel_targets)
     return batches, targets
-    
-sv = util.SimpleVocab.load_from_corpus(args.data, "../tmp/cmaj_nott_sv.p")
-corpus = data.Corpus(args.data, sv, args.cuda)
-train_batches, train_targets = batchify(corpus.train, args.batch_size)
-valid_batches, valid_targets = batchify(corpus.valid, args.batch_size)
-test_batches, test_targets = batchify(corpus.test, args.batch_size)
-train_mb_indices = range(0, int(len(corpus.train)/args.batch_size))
-valid_mb_indices = range(0, int(len(corpus.valid)/args.batch_size))
-test_mb_indices = range(0, int(len(corpus.test)/args.batch_size))
+   
+if args.factorize:
+    if args.progress_tokens:
+        vocabf = args.vocabf + '_factorized_measuretokens.p'
+        corpusf = args.corpusf + '_factorized_measuretokens.p'
+        sv = util.FactorPDMVocab.load_from_corpus(args.data, vocabf)
+    else:
+        vocabf = args.vocabf + '_factorized.p'
+        corpusf = args.corpusf + '_factorized.p'
+        sv = util.FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
+else:
+    vocabf = args.vocabf + '.p'
+    corpusf = args.corpusf + '.p'
+    sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
+corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf)
+
+''' Size: num_channels * num_batches * num_examples_in_batch_i '''
+train_batches, train_targets = batchify(corpus.trains, args.batch_size)
+valid_batches, valid_targets = batchify(corpus.valids, args.batch_size)
+test_batches, test_targets = batchify(corpus.tests, args.batch_size)
+train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
+valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
+test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 
 ###############################################################################
 # Build the model
 ###############################################################################
 
-ntokens = sv.size
+ntokens = sv.sizes
 if args.arch == "hrnn":
-    model = torchrnnlm.HRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+    model = hrnnlm.FactorHRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
 else:
-    model = torchrnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
-    # model = torchrnnlm.RNNCellModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.attention)
+    model = rnnlm.FactorRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+
 if args.cuda:
     model.cuda()
 
@@ -132,22 +158,33 @@ def repackage_hidden(h):
 
     return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
-def get_batch_variable(batches, targets, batch, evaluation=False):
-    data = batches[batch]
-    target = targets[batch]
-    seq_lens = [torch.nonzero(data[i]).size(0) for i in range(data.size(0))] 
-    return Variable(data, volatile=evaluation), Variable(target), seq_lens
+def get_batch_variables(batches, targets, batch, evaluation=False):
+    ''' Size of |batches|: num_channels * num_batches * num_examples_in_batch_i '''
+    batch_data = []
+    batch_target = []
+    num_channels = len(batches)
+    for channel in range(num_channels):
+        batch_data.append(batches[channel][batch])
+        batch_target.append(targets[channel][batch])
+    seq_lens = [[torch.nonzero(batch_data[0][i]).size(0) for i in range(batch_data[0].size(0))] * num_channels]
+    return [Variable(batch_data[c], volatile=evaluation) for c in range(num_channels)], [Variable(batch_target[c]) for c in range(num_channels)], seq_lens
 
 def evaluate(data_source, data_targets, mb_indices):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0
-    ntokens = len(corpus.vocab)
+    ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     for batch in mb_indices:
-        data, targets, seq_lens = get_batch_variable(data_source, data_targets, batch, evaluation=True)
-        output, hidden = model(data, hidden)
-        total_loss += criterion(output.view(-1, ntokens), targets).data 
+        data, targets, seq_lens = \
+            get_batch_variables(data_source, data_targets, batch, evaluation=True)
+        if args.arch == "hrnn":       
+            outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
+        else:
+            outputs, hidden = model(data, hidden)
+        outputs_flat = [outputs[i].view(-1, ntokens[i]) for i in range(len(outputs))]
+        total_loss += sum(
+            [criterion(outputs_flat[c], targets[c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
     return total_loss[0] / len(data_source) # num batches
 
@@ -157,17 +194,21 @@ def train():
     model.train()
     total_loss = 0
     start_time = time.time()
-    ntokens = len(corpus.vocab)
+    ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
     for batch in train_mb_indices:
-        data, targets, seq_lens = get_batch_variable(train_batches, train_targets, batch)
+        data, targets, seq_lens = get_batch_variables(train_batches, train_targets, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
-        output, hidden = model(data, hidden)
-        loss = criterion(output.view(-1, ntokens), targets)
+        if args.arch == "hrnn":       
+            outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
+        else:
+            outputs, hidden = model(data, hidden)
+        outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
+        loss = sum([criterion(outputs_flat[c], targets[c]) for c in range(len(outputs))])
         loss.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.

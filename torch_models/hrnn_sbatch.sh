@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 10
 #SBATCH --gres=gpu:1
-#SBATCH --mem=10g
+#SBATCH --mem=15g
 #SBATCH -t 0
 #SBATCH -o ../../slurm-out/hrnn_torch.txt
+#TODO
 
 set -x  # echo commands to stdout
 set -e  # exit on error
@@ -24,6 +24,12 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-# python train.py --cuda --save="../tmp/hrnn.pt" --epochs=100 --arch="hrnn"
-python generate.py --cuda --outf="condhrnn" --checkpoint="../tmp/hrnn.pt" --num_out=5 --condition_piece="../music_data/CMaj_Nottingham/CMaj_valid/CMaj_hpps_simple_chords_52.mid" --condition_measures=4
+FILE_NAME="../tmp/hrnn.pt"
+ARCH="hrnn"
+VOCABF="../tmp/cmaj_nott_sv"
+CORPUSF="../tmp/cmaj_nott_sv_corpus"
+CONDITION_MEASURES=0
+python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=256 --data="../music_data/CMaj_Nottingham/" --vocabf=$VOCABF --corpusf=$CORPUSF --arch=$ARCH  --emsize=10 --batch_size=64 --factorize  --progress_tokens
+python generate.py --cuda --outf="condhrnn" --checkpoint=$FILE_NAME --vocabf=$VOCABF --corpusf=$CORPUSF --num_out=10 --condition_piece="../music_data/CMaj_Nottingham/valid/jigs_simple_chords_16.mid" --condition_measures=$CONDITION_MEASURES --arch=$ARCH --factorize --progress_tokens
+
 

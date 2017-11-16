@@ -3,5 +3,6 @@
 *.pt
 *.p
 .DS_Store
-tmp/
 *.swp
+*.swo
+tmp/
