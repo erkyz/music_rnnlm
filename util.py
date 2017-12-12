@@ -149,7 +149,7 @@ class SimpleVocab(object):
 
 
 class PitchDurationVocab(SimpleVocab):
-    def __init__(self):
+    def __init__(self, include_measure_tokens=True):
         super(PitchDurationVocab, self).__init__(num_channels=1) 
         self.special_events = {
                 "padding": self.add_event_to_all((PADDING_NAME, PADDING_NAME)),
@@ -173,9 +173,12 @@ class PitchDurationVocab(SimpleVocab):
                 if type(e) is music21.note.Note:
                     out.append((e.nameWithOctave, e.duration.quarterLength))
                     measure_progress += e.duration.quarterLength
+		elif type(e) is music21.note.Rest:
+		    out.append((e.name, e.duration.quarterLength))
+                    measure_progress += e.duration.quarterLength
             break # TODO this break will only work for Nottingham-like MIDI
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
-        return out
+        return out, measure_limit
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):
@@ -235,7 +238,7 @@ class FactorPitchDurationVocab(SimpleVocab):
                     measure_progress += e.duration.quarterLength
             break # TODO this break will only work for Nottingham-like MIDI
         out.append(END_OF_TRACK_NAME)
-        return out
+        return out, measure_limit
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):
@@ -306,7 +309,7 @@ class FactorPDMVocab(SimpleVocab):
                     measure_progress += e.duration.quarterLength
             break # TODO this break will only work for Nottingham-like MIDI
         out.append(END_OF_TRACK_NAME)
-        return out
+        return out, measure_limit
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):
@@ -316,7 +319,7 @@ class FactorPDMVocab(SimpleVocab):
         filenames = getmidfiles(path) 
         for filename in filenames:
             for channel in range(3):
-                events = clss.mid2orig(filename, channel)
+                events, _ = clss.mid2orig(filename, channel)
                 for event in events:
                     v.add_event_to_channel(event, channel)
         print "FactorPDMVocab sizes:", v.sizes

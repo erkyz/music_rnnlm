@@ -23,7 +23,7 @@ class Corpus(object):
         for f in util.getmidfiles(path):
             for c in range(self.vocab.num_channels):
                 melodies[c].append(
-                    [self.vocab.orig2e[c][orig].i for orig in self.vocab.mid2orig(f, channel=c)])
+                    [self.vocab.orig2e[c][orig].i for orig, _ in self.vocab.mid2orig(f, channel=c)])
         for c in range(self.vocab.num_channels):
             melodies[c].sort(key=lambda x: -len(x))
         return melodies

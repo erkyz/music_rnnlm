@@ -73,7 +73,7 @@ def get_events(condition_piece, cuda, sv):
     if args.condition_piece != "":
         for channel in range(sv.num_channels):
             curr_measure = 0
-            origs = sv.mid2orig(args.condition_piece, channel)
+            origs, _ = sv.mid2orig(args.condition_piece, channel)
             for orig in origs:
                 event = sv.orig2e[channel][orig]
                 channel_events[channel].append(event)
