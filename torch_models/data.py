@@ -22,6 +22,9 @@ class Corpus(object):
         melodies = [[] for _ in range(self.vocab.num_channels)]
         for f in util.getmidfiles(path):
             for c in range(self.vocab.num_channels):
+                melody = self.vocab.mid2orig(f, channel=c)
+                if len(melody) < 5 or len(melody) > 450:
+                    continue
                 melodies[c].append(
                     [self.vocab.orig2e[c][orig].i for orig, _ in self.vocab.mid2orig(f, channel=c)])
         for c in range(self.vocab.num_channels):
