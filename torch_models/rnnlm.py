@@ -167,7 +167,6 @@ class RRNNModel(nn.Module):
         self.nhid = nhid
         self.nlayers = nlayers
         self.ntokens = ntokens
-        self.temperature = 0.9 # TODO don't hardcode here
 
     def init_weights(self):
         initrange = 0.1
@@ -175,13 +174,13 @@ class RRNNModel(nn.Module):
             self.encoders[i].weight.data.uniform_(-initrange, initrange)
             self.decoders[i].bias.data.fill_(0)
             self.decoders[i].weight.data.uniform_(-initrange, initrange)
-        self.gamma = torch.autograd.Variable(torch.Tensor([0]).cuda().float())
+        self.gamma = torch.nn.Parameter(torch.Tensor([0]).cuda().float(), requires_grad=True)
+        self.temperature = torch.nn.Parameter(torch.Tensor([1]).cuda().float(), requires_grad=True)
 
     def forward(self, inputs, hidden, measure_weights, measure_length, measure_steps):
         '''
         |inputs|: each measure is padded to the same length
-        |measure_weights| is bs x (seqlen / measure_length) x (seqlen / measure_length), 
-            the "attention" weights
+        |measure_weights| is bs x num_measures x num_measures, the "attention" weights
         |measure_length| is an integer specifying how many tokens are in each measure.
         |measure_steps| is a list, for each channel, of a list with length measure_length 
             of tensors bs x num_measures, the ith event in each measure
@@ -204,7 +203,7 @@ class RRNNModel(nn.Module):
             # normalized previous measure weights
             softmax = torch.nn.functional.softmax(
                 measure_weights[:,curr_measure,:curr_measure].permute(1,0) \
-                / self.temperature).permute(1,0)
+                / torch.abs(self.temperature)).permute(1,0)
             tiled_softmax = softmax.unsqueeze(2).expand(
                     batch_size, curr_measure, self.emsize * self.num_channels)
             for step in range(measure_length):
@@ -245,8 +244,10 @@ class RRNNModel(nn.Module):
         for i in range(self.num_channels):
             decoded = self.decoders[i](
                 output.view(output.size(0)*output.size(1), output.size(2)))
-            decs.append((1-self.gamma) * decoded.view(output.size(0), output.size(1), decoded.size(1)) \
-                         + self.gamma * lookback_output)
+            w = torch.sigmoid(self.gamma)
+            decs.append((1-w)*decoded.view(output.size(0), output.size(1), decoded.size(1)) \
+                         + w*lookback_output)
+        print self.gamma, self.temperature
         return decs, (h_t, c_t)
 
     def init_hidden(self, bsz):
@@ -256,5 +257,6 @@ class RRNNModel(nn.Module):
                     Variable(weight.new(bsz, self.nhid).zero_()))
         else:
             return Variable(weight.new(bsz, self.nhid).zero_())
+
 
 

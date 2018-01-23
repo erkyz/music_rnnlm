@@ -2,9 +2,9 @@
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --gres=gpu:1
-#SBATCH --mem=200g
+#SBATCH --mem=100g
 #SBATCH -t 0
-#SBATCH -o ../../slurm-out/base_torch_1.txt
+#SBATCH -o ../../slurm-out/base_torch.txt
 
 set -x  # echo commands to stdout
 set -e  # exit on error

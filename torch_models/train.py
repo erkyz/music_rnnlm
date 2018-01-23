@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import rnnlm, hrnnlm
 import data
+import similarity
 import util
 
 PADDING = 0
@@ -108,30 +109,32 @@ def pad_measures(melody, measure_length, num_measures):
     return out
 
 def get_measure_padded_batch(source, batch, bsz, sv):
-    """ Returns two Tensors corresponding to the batch, where the space between measure tokens is equal """
+    ''' Returns two Tensors corresponding to the batch, where the space between measure tokens is equal '''
+    ''' batch should be of tuples '''
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx - 1))
     source_slice = source[start_idx:start_idx+this_bsz]
     max_measure_length, max_num_measures = max_measure_info(source_slice)
-    data = torch.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
-    target = torch.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
+    data = torch.cuda.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
+    ssms = torch.cuda.FloatTensor(this_bsz, max_num_measures, max_num_measures).zero_()
+    target = torch.cuda.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
     measure_steps = []
     for i in range(this_bsz):
         padded = pad_measures(source_slice[i], max_measure_length, max_num_measures)
-        data[i] = torch.LongTensor(padded)
+        ssm = similarity.get_padded_ssm(padded, max_measure_length, sv).tolist() 
+        data[i] = torch.cuda.LongTensor(padded)
+        ssms[i] = torch.FloatTensor(ssm)
         t = padded[1:] + [PADDING]
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
         for j in xrange(second_measure_idx):
             t[j] = PADDING
-        target[i] = torch.LongTensor(t)
-    data = data.cuda()
-    target = target.cuda()
+        target[i] = torch.cuda.LongTensor(t)
     for step in range(max_measure_length):
-        indices = torch.LongTensor(
-            [measure*max_measure_length + step for measure in range(max_num_measures)]).cuda()
+        indices = torch.cuda.LongTensor(
+            [measure*max_measure_length + step for measure in range(max_num_measures)])
         measure_steps.append(torch.index_select(data, 1, indices))
-    return data, target.view(-1), measure_steps, max_measure_length, max_num_measures
+    return data, target.view(-1), ssms, measure_steps, max_measure_length, max_num_measures
 
 def get_batch(source, batch, bsz, sv):
     """ Returns two Tensors corresponding to the batch """
@@ -163,13 +166,15 @@ def batchify(source, bsz, sv):
     targets = []
     measure_info = []
     batch_measure_steps = []
+    batch_measure_weights = []
     for channel in range(len(source)):
         channel_batches = []
         channel_targets = []
         channel_measure_steps = []
+        channel_measure_weights = []
         for batch in range(len(source[channel])/bsz):
             if args.arch == 'rrnn':
-                data, target, measure_steps, max_measure_length, max_num_measures = \
+                data, target, ssms, measure_steps, max_measure_length, max_num_measures = \
                     get_measure_padded_batch(source[channel], batch, bsz, sv) 
             else:
                 data, target = get_batch(source[channel], batch, bsz, sv) 
@@ -178,10 +183,12 @@ def batchify(source, bsz, sv):
             channel_batches.append(data)
             channel_targets.append(target)
             channel_measure_steps.append(measure_steps)
+            channel_measure_weights.append(ssms)
         batches.append(channel_batches)
         targets.append(channel_targets)
         batch_measure_steps.append(channel_measure_steps)
-    return batches, targets, batch_measure_steps, measure_info
+        batch_measure_weights.append(channel_measure_weights)
+    return batches, targets, batch_measure_steps, batch_measure_weights, measure_info
    
 if args.factorize:
     if args.progress_tokens:
@@ -202,13 +209,14 @@ corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf)
 f = '../tmp/train_batch_data.p'
 if os.path.isfile(f):
     print "Load existing train data", f
-    train_batches, train_targets, train_measure_steps, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_info = pickle.load(open(f, 'rb'))
+    train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info = pickle.load(open(f, 'rb'))
 else:
-    train_batches, train_targets, train_measure_steps, train_measure_info = batchify(corpus.trains, args.batch_size, sv)
-    valid_batches, valid_targets, valid_measure_steps, valid_measure_info = batchify(corpus.valids, args.batch_size, sv)
-    test_batches, test_targets, test_measure_steps, test_measure_info = batchify(corpus.tests, args.batch_size, sv)
-    pickle.dump((train_batches, train_targets, train_measure_steps, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_info), open(f, 'wb'))   
- 
+    train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info = batchify(corpus.trains, args.batch_size, sv)
+    valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info = batchify(corpus.valids, args.batch_size, sv)
+    test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info = batchify(corpus.tests, args.batch_size, sv)
+    print "Saving train data to", f
+    pickle.dump((train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info), open(f, 'wb'))   
+
 train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
 valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
 test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
@@ -244,32 +252,36 @@ def repackage_hidden(h):
 
     return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
-def get_batch_variables(batches, targets, measure_steps, batch, evaluation=False):
+def get_batch_variables(batches, targets, measure_weights, measure_steps, batch, evaluation=False):
     ''' Size of |batches|: num_channels * num_batches * num_examples_in_batch_i '''
     batch_data = []
     batch_target = []
     batch_measure_steps = []
+    batch_measure_weights = []
     num_channels = len(batches)
     for channel in range(num_channels):
         batch_data.append(batches[channel][batch])
         batch_target.append(targets[channel][batch])
         batch_measure_steps.append(measure_steps[channel][batch])
-    return [Variable(batch_data[c], volatile=evaluation) for c in range(num_channels)], [Variable(batch_target[c]) for c in range(num_channels)], [[Variable(batch_measure_steps[c][s]) for s in range(len(batch_measure_steps[c]))] for c in range(num_channels)]
+        batch_measure_weights.append(measure_weights[channel][batch])
+    return [Variable(batch_data[c], volatile=evaluation) for c in range(num_channels)], \
+            [Variable(batch_target[c], volatile=evaluation) for c in range(num_channels)], \
+            [[Variable(batch_measure_steps[c][s], volatile=evaluation) for s in range(len(batch_measure_steps[c]))] for c in range(num_channels)], \
+            [Variable(batch_measure_weights[c], volatile=evaluation) for c in range(num_channels)]
 
-def evaluate(data_source, data_targets, measure_info, measure_steps, mb_indices):
+def evaluate(data_source, data_targets, measure_info, measure_weights, measure_steps, mb_indices):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     for batch in mb_indices:
-        data, targets, batch_measure_steps  = \
-            get_batch_variables(data_source, data_targets, measure_steps, batch, evaluation=True)
+        data, targets, batch_measure_steps, batch_measure_weights = \
+            get_batch_variables(data_source, data_targets, measure_weights, measure_steps, batch, evaluation=True)
         if args.arch == 'rrnn':
             measure_length, num_measures = measure_info[batch] 
-            test_weights = torch.ones(args.batch_size, num_measures, num_measures).cuda() # TODO
             outputs, hidden = model(
-                data, hidden, test_weights, measure_length, batch_measure_steps)
+                data, hidden, batch_measure_weights[0], measure_length, batch_measure_steps)
         elif args.arch == "hrnn":       
             outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
         else:
@@ -289,16 +301,16 @@ def train():
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
     for batch in train_mb_indices:
-        data, targets, measure_steps = get_batch_variables(train_batches, train_targets, train_measure_steps, batch)
+        data, targets, measure_steps, measure_weights = get_batch_variables(train_batches, train_targets, train_measure_weights, train_measure_steps, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
         if args.arch == 'rrnn':
-            measure_length, num_measures = train_measure_info[batch] 
-            test_weights = torch.ones(args.batch_size, num_measures, num_measures).cuda() # TODO
+            measure_length, num_measures = train_measure_info[batch]
             outputs, hidden = model(
-                data, hidden, test_weights, measure_length, measure_steps)
+                data, hidden, measure_weights[0], measure_length, measure_steps)
+            # TODO properly handle measure_weights for multiple channels.
         elif args.arch == "hrnn":       
             outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
         else:
@@ -334,7 +346,7 @@ try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train()
-        val_loss = evaluate(valid_batches, valid_targets, valid_measure_info, valid_measure_steps, valid_mb_indices)
+        val_loss = evaluate(valid_batches, valid_targets, valid_measure_info, valid_measure_weights, valid_measure_steps, valid_mb_indices)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
@@ -357,7 +369,7 @@ with open(args.save, 'rb') as f:
     model = torch.load(f)
 
 # Run on test data.
-test_loss = evaluate(test_batches, test_targets, test_measure_info, test_measure_steps, test_mb_indices)
+test_loss = evaluate(test_batches, test_targets, test_measure_info, test_measure_weights, test_measure_steps, test_mb_indices)
 print('=' * 89)
 print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
     test_loss, math.exp(test_loss)))
