@@ -100,3 +100,20 @@ def get_ssm(f, pdv):
     # plt.savefig('../similarities/' + args.melody + '.png')
 
 
+def get_note_sdm(melody, pdv, window):
+    """ self-distance matrix """
+    ''' |pdv| must be a PDV'''
+    melody = [pdv.i2e[0][i].original for i in melody][1:]
+
+    differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
+    rawDiffs = map(lambda x: x[0], differences)
+
+    sdm = np.ones([len(differences), len(differences)]) * 20 # "default" distance 
+    for i in xrange(window-1, len(differences)):
+        for j in xrange(window-1, len(differences)):
+            sdm[i,j] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
+
+    return sdm, rawDiffs
+
+
+

@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100g
 #SBATCH -t 0
-#SBATCH -o ../../slurm-out/base_torch.txt
+#SBATCH -o ../../slurm-out/cond_torch.txt
 
 set -x  # echo commands to stdout
 set -e  # exit on error
@@ -28,8 +28,7 @@ VOCABF="../tmp/cmaj_nott_sv"
 CORPUSF="../tmp/cmaj_nott_sv_corpus"
 DATA_DIR="../music_data/debug_data_small/" # note that because the corpus exists, this doesn't do anything
 CONDITION_MEASURES=0
-WINDOW=0
-DISTANCE_THRESHOLD=0
+WINDOW=8
+DISTANCE_THRESHOLD=3
 # NO PROGRESS TOKENS IF YOU WANT TO DO CRNN
-python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD 
-
+python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD --arch='crnn' 

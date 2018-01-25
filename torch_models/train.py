@@ -9,6 +9,7 @@ from operator import eq
 from torch.autograd import Variable
 import sys, os
 import pickle
+import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,6 +18,7 @@ import data
 import similarity
 import util
 
+# event index for padding
 PADDING = 0
 
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
@@ -55,6 +57,10 @@ parser.add_argument('--factorize', action='store_true',
 parser.add_argument('--progress_tokens', action='store_true',
                     help='whether to condition on the amount of time left until the end \
                             of the measure')
+parser.add_argument('--window', type=int, default=8,
+                    help='window size for note-based moving edit distances')
+parser.add_argument('--distance_threshold', type=int, default=3,
+                    help='distance where below, we consider windows sufficiently similar')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
@@ -85,56 +91,45 @@ def nth_item_index(n, item, iterable):
     indices = compress(count(), imap(partial(eq, item), iterable))
     return next(islice(indices, n, None), -1)
 
-def max_measure_info(source_slice):
-    max_measure_length = max_num_measures = 0
-    for b in source_slice:
-        length_counter = 0
-        num_counter = 1
-        for s in b:
-            length_counter += 1
-            if s == sv.special_events['measure'].i:
-                max_measure_length = max(max_measure_length, length_counter)
-                num_counter += 1
-                length_counter = 0
-            max_num_measures = max(num_counter, max_num_measures)
-    return max_measure_length, max_num_measures
-
-def pad_measures(melody, measure_length, num_measures):
-    measure_idxs = [0]+[nth_item_index(i, sv.special_events['measure'].i, melody) for i in range(num_measures-1)]+[len(melody)+1]
-    out = []
-    for i in range(len(measure_idxs)-1):
-        measure = melody[measure_idxs[i]:measure_idxs[i+1]]
-        out += measure
-        out += [0]*(measure_length-len(measure))
-    return out
-
-def get_measure_padded_batch(source, batch, bsz, sv):
-    ''' Returns two Tensors corresponding to the batch, where the space between measure tokens is equal '''
-    ''' batch should be of tuples '''
+def get_batch_with_conditions(source, batch, bsz, sv):
+    """ Returns two Tensors corresponding to the batch """
+    def pad(tensor, length):
+        return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx - 1))
     source_slice = source[start_idx:start_idx+this_bsz]
-    max_measure_length, max_num_measures = max_measure_info(source_slice)
-    data = torch.cuda.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
-    ssms = torch.cuda.FloatTensor(this_bsz, max_num_measures, max_num_measures).zero_()
-    target = torch.cuda.LongTensor(this_bsz, max_measure_length * max_num_measures).zero_()
-    measure_steps = []
+    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
+    maxlen = len(source_slice[0])
+    data = torch.LongTensor(this_bsz,maxlen).zero_()
+    conditions = torch.FloatTensor(this_bsz,maxlen).zero_()
+    target = torch.LongTensor(this_bsz,maxlen).zero_()
     for i in range(this_bsz):
-        padded = pad_measures(source_slice[i], max_measure_length, max_num_measures)
-        ssm = similarity.get_padded_ssm(padded, max_measure_length, sv).tolist() 
-        data[i] = torch.cuda.LongTensor(padded)
-        ssms[i] = torch.FloatTensor(ssm)
-        t = padded[1:] + [PADDING]
+        sdm, diffs = similarity.get_note_sdm(source_slice[i], sv, args.window)
+        # for each column, get the minimum before i
+        batch_conditions = []
+        for row in range(sdm.shape[0]-1):
+            if sdm[row][:row].size > 0 and np.amin(sdm[row][:row]) < args.distance_threshold:
+                # get whether the next note is up, down, or the same.
+                differential = diffs[row+1]
+                batch_conditions.append(differential)
+            else:
+                # otherwise, provide no information
+                batch_conditions.append(0)
+        data[i] = pad(torch.LongTensor(source_slice[i]), maxlen)
+        # We pad the end of conditions with zeros, which is technically incorrect.
+        # But because the outputs are ignored anyways, we don't care.
+        conditions[i] = pad(torch.FloatTensor(batch_conditions), maxlen) 
+        t = target_slice[i] 
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
         for j in xrange(second_measure_idx):
             t[j] = PADDING
-        target[i] = torch.cuda.LongTensor(t)
-    for step in range(max_measure_length):
-        indices = torch.cuda.LongTensor(
-            [measure*max_measure_length + step for measure in range(max_num_measures)])
-        measure_steps.append(torch.index_select(data, 1, indices))
-    return data, target.view(-1), ssms, measure_steps, max_measure_length, max_num_measures
+        target[i] = pad(torch.LongTensor(t), maxlen)
+    if args.cuda: 
+        data = data.cuda()
+        conditions = conditions.cuda()
+        target = target.cuda()
+    return data, conditions, target.view(-1)
 
 def get_batch(source, batch, bsz, sv):
     """ Returns two Tensors corresponding to the batch """
@@ -161,35 +156,29 @@ def get_batch(source, batch, bsz, sv):
     return data, target.view(-1)
 
 def batchify(source, bsz, sv):
-    """ Returns three lists """
-    batches = []
-    targets = []
-    measure_info = []
-    batch_measure_steps = []
-    batch_measure_weights = []
+    batch_data = {"data": [], "targets": []}
+    if args.arch == 'crnn':
+        batch_data["conditions"] = []
     for channel in range(len(source)):
         channel_batches = []
         channel_targets = []
-        channel_measure_steps = []
-        channel_measure_weights = []
+        channel_conditions = []
         for batch in range(len(source[channel])/bsz):
-            if args.arch == 'rrnn':
-                data, target, ssms, measure_steps, max_measure_length, max_num_measures = \
-                    get_measure_padded_batch(source[channel], batch, bsz, sv) 
+            if args.arch == 'crnn':
+                data, conditions, target, = \
+                    get_batch_with_conditions(source[channel], batch, bsz, sv) 
+                channel_conditions.append(conditions)
             else:
                 data, target = get_batch(source[channel], batch, bsz, sv) 
-            if channel == 0 and args.arch == 'rrnn':
-                measure_info.append((max_measure_length, max_num_measures))
             channel_batches.append(data)
             channel_targets.append(target)
-            channel_measure_steps.append(measure_steps)
-            channel_measure_weights.append(ssms)
-        batches.append(channel_batches)
-        targets.append(channel_targets)
-        batch_measure_steps.append(channel_measure_steps)
-        batch_measure_weights.append(channel_measure_weights)
-    return batches, targets, batch_measure_steps, batch_measure_weights, measure_info
+        batch_data["data"].append(channel_batches)
+        batch_data["targets"].append(channel_targets)
+        if args.arch == 'crnn':
+            batch_data["conditions"].append(channel_conditions)
+    return batch_data
    
+t = time.time()
 if args.factorize:
     if args.progress_tokens:
         vocabf = args.vocabf + '_factorized_measuretokens.p'
@@ -203,19 +192,23 @@ else:
     vocabf = args.vocabf + '.p'
     corpusf = args.corpusf + '.p'
     sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
+
 corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf)
+print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = '../tmp/train_batch_data.p'
+f = '../tmp/train_batch_data_w' + str(args.window) + 'dt' + str(args.distance_threshold) + args.arch + '.p'
 if os.path.isfile(f):
     print "Load existing train data", f
-    train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info = pickle.load(open(f, 'rb'))
+    train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
 else:
-    train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info = batchify(corpus.trains, args.batch_size, sv)
-    valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info = batchify(corpus.valids, args.batch_size, sv)
-    test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info = batchify(corpus.tests, args.batch_size, sv)
-    print "Saving train data to", f
-    pickle.dump((train_batches, train_targets, train_measure_steps, train_measure_weights, train_measure_info, valid_batches, valid_targets, valid_measure_steps, valid_measure_weights, valid_measure_info, test_batches, test_targets, test_measure_steps, test_measure_weights, test_measure_info), open(f, 'wb'))   
+    print "Begin batchify"
+    t = time.time()
+    train_data = batchify(corpus.trains, args.batch_size, sv)
+    valid_data = batchify(corpus.valids, args.batch_size, sv)
+    test_data = batchify(corpus.tests, args.batch_size, sv)
+    print "Saving train data to", f, "time elapsed", time.time() - t
+    pickle.dump((train_data, valid_data, test_data), open(f, 'wb'))
 
 train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
 valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
@@ -226,10 +219,10 @@ test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 ###############################################################################
 
 ntokens = sv.sizes
-if args.arch == 'rrnn':
-    model = rnnlm.RRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
-elif args.arch == "hrnn":
+if args.arch == "hrnn":
     model = hrnnlm.FactorHRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+elif args.arch == "crnn":
+    model = rnnlm.CRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
 else:
     model = rnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
 
@@ -252,45 +245,39 @@ def repackage_hidden(h):
 
     return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
-def get_batch_variables(batches, targets, measure_weights, measure_steps, batch, evaluation=False):
+def get_batch_variables(batches, batch, evaluation=False):
     ''' Size of |batches|: num_channels * num_batches * num_examples_in_batch_i '''
-    batch_data = []
-    batch_target = []
-    batch_measure_steps = []
-    batch_measure_weights = []
-    num_channels = len(batches)
+    batch_data = {}
+    for key in batches:
+        batch_data[key] = []
+    num_channels = len(batches["data"])
     for channel in range(num_channels):
-        batch_data.append(batches[channel][batch])
-        batch_target.append(targets[channel][batch])
-        batch_measure_steps.append(measure_steps[channel][batch])
-        batch_measure_weights.append(measure_weights[channel][batch])
-    return [Variable(batch_data[c], volatile=evaluation) for c in range(num_channels)], \
-            [Variable(batch_target[c], volatile=evaluation) for c in range(num_channels)], \
-            [[Variable(batch_measure_steps[c][s], volatile=evaluation) for s in range(len(batch_measure_steps[c]))] for c in range(num_channels)], \
-            [Variable(batch_measure_weights[c], volatile=evaluation) for c in range(num_channels)]
+        for key, value in batches.iteritems():
+            batch_data[key].append(value[channel][batch])
 
-def evaluate(data_source, data_targets, measure_info, measure_weights, measure_steps, mb_indices):
+    # Turn data into Variable_s
+    batch_data_variables = {}
+    for key in batch_data:
+        batch_data_variables[key] = \
+            [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
+    return batch_data_variables
+
+def evaluate(eval_data, mb_indices):
     # Turn on evaluation mode which disables dropout.
     model.eval()
     total_loss = 0
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     for batch in mb_indices:
-        data, targets, batch_measure_steps, batch_measure_weights = \
-            get_batch_variables(data_source, data_targets, measure_weights, measure_steps, batch, evaluation=True)
-        if args.arch == 'rrnn':
-            measure_length, num_measures = measure_info[batch] 
-            outputs, hidden = model(
-                data, hidden, batch_measure_weights[0], measure_length, batch_measure_steps)
-        elif args.arch == "hrnn":       
-            outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
-        else:
-            outputs, hidden = model(data, hidden)
-        outputs_flat = [outputs[i].view(-1, ntokens[i]) for i in range(len(outputs))]
+        data = get_batch_variables(eval_data, batch, evaluation=True)
+        if args.arch == "hrnn":       
+            data["special_event"] = corpus.vocab.special_events['measure'].i
+        outputs, hidden = model(data, hidden)
+        outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         total_loss += sum(
-            [criterion(outputs_flat[c], targets[c]) for c in range(len(outputs))]).data
+            [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
-    return total_loss[0] / len(data_source) # num batches
+    return total_loss[0] / len(eval_data["data"]) # num batches
 
 def train():
     # Turn on training mode which enables dropout.
@@ -301,22 +288,16 @@ def train():
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
     for batch in train_mb_indices:
-        data, targets, measure_steps, measure_weights = get_batch_variables(train_batches, train_targets, train_measure_weights, train_measure_steps, batch)
+        data = get_batch_variables(train_data, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
-        if args.arch == 'rrnn':
-            measure_length, num_measures = train_measure_info[batch]
-            outputs, hidden = model(
-                data, hidden, measure_weights[0], measure_length, measure_steps)
-            # TODO properly handle measure_weights for multiple channels.
-        elif args.arch == "hrnn":       
-            outputs, hidden = model(data, hidden, corpus.vocab.special_events['measure'].i)
-        else:
-            outputs, hidden = model(data, hidden)
+        if args.arch == "hrnn":       
+            data["special_event"] = corpus.vocab.special_events['measure'].i
+        outputs, hidden = model(data, hidden)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
-        loss = sum([criterion(outputs_flat[c], targets[c]) for c in range(len(outputs))])
+        loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
         # loss should be a matrix, I believe.
         loss.backward()
 
@@ -346,7 +327,7 @@ try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train()
-        val_loss = evaluate(valid_batches, valid_targets, valid_measure_info, valid_measure_weights, valid_measure_steps, valid_mb_indices)
+        val_loss = evaluate(valid_data, valid_mb_indices)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
@@ -369,7 +350,7 @@ with open(args.save, 'rb') as f:
     model = torch.load(f)
 
 # Run on test data.
-test_loss = evaluate(test_batches, test_targets, test_measure_info, test_measure_weights, test_measure_steps, test_mb_indices)
+test_loss = evaluate(test_data, test_mb_indices)
 print('=' * 89)
 print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
     test_loss, math.exp(test_loss)))
