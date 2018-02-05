@@ -29,7 +29,7 @@ parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
                     help='location of the saved vocabulary, or where to save it')
 parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
                     help='location of the saved corpus, or where to save it')
-parser.add_argument('--model', type=str, default='LSTM',
+parser.add_argument('--rnn_type', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--arch', type=str, default='base')
 parser.add_argument('--emsize', type=int, default=100,
@@ -57,6 +57,8 @@ parser.add_argument('--factorize', action='store_true',
 parser.add_argument('--progress_tokens', action='store_true',
                     help='whether to condition on the amount of time left until the end \
                             of the measure')
+parser.add_argument('--measure_tokens', action='store_true',
+                    help='whether to have a token in between measures')
 parser.add_argument('--window', type=int, default=8,
                     help='window size for note-based moving edit distances')
 parser.add_argument('--distance_threshold', type=int, default=3,
@@ -101,24 +103,16 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
     maxlen = len(source_slice[0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
-    conditions = torch.FloatTensor(this_bsz,maxlen).zero_()
+    conditions = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for i in range(this_bsz):
-        sdm, diffs = similarity.get_note_sdm(source_slice[i], sv, args.window)
-        # for each column, get the minimum before i
-        batch_conditions = []
-        for row in range(sdm.shape[0]-1):
-            if sdm[row][:row].size > 0 and np.amin(sdm[row][:row]) < args.distance_threshold:
-                # get whether the next note is up, down, or the same.
-                differential = diffs[row+1]
-                batch_conditions.append(differential)
-            else:
-                # otherwise, provide no information
-                batch_conditions.append(0)
+        # TODO shouldn't be channel 0...
+        melody = [sv.i2e[0][i].original for i in source_slice[i]][1:]
+        batch_conditions = similarity.get_future_from_past(melody, args)
         data[i] = pad(torch.LongTensor(source_slice[i]), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
-        conditions[i] = pad(torch.FloatTensor(batch_conditions), maxlen) 
+        conditions[i] = pad(torch.LongTensor(batch_conditions), maxlen) 
         t = target_slice[i] 
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
@@ -218,13 +212,14 @@ test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 # Build the model
 ###############################################################################
 
-ntokens = sv.sizes
+args.ntokens = sv.sizes
+args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
 if args.arch == "hrnn":
-    model = hrnnlm.FactorHRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+    model = hrnnlm.FactorHRNNModel(args)
 elif args.arch == "crnn":
-    model = rnnlm.CRNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+    model = rnnlm.CRNNModel(args)
 else:
-    model = rnnlm.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout)
+    model = rnnlm.RNNModel(args)
 
 if args.cuda:
     model.cuda()
@@ -270,6 +265,7 @@ def evaluate(eval_data, mb_indices):
     hidden = model.init_hidden(args.batch_size)
     for batch in mb_indices:
         data = get_batch_variables(eval_data, batch, evaluation=True)
+
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden)

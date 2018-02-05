@@ -14,25 +14,30 @@ class AttrProxy(object):
 
 
 class RNNModel(nn.Module):
-    def __init__(self, rnn_type, ntokens, emsize, nhid, nlayers, dropout=0.1):
+    def __init__(self, args):
         '''
         ntokens is a list of the numbers of tokens in the dictionary of each channel
         '''
         super(RNNModel, self).__init__()
+        nhid = args.nhid
+        nlayers = args.nlayers
+        dropout = args.dropout
+        ntokens = args.ntokens
+
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
         for i in range(self.num_channels):
-            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], emsize)) 
-        if rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, rnn_type)(
-                emsize*self.num_channels, nhid, nlayers, dropout=dropout)
+            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+        if args.rnn_type in ['LSTM', 'GRU']:
+            self.rnn = getattr(nn, args.rnn_type)(
+                args.emsize*self.num_channels, nhid, nlayers, dropout=dropout)
         else:
             try:
-                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
+                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[args.rnn_type]
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(emsize, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+            self.rnn = nn.RNN(args.emsize, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
@@ -40,7 +45,7 @@ class RNNModel(nn.Module):
 
         self.init_weights()
 
-        self.rnn_type = rnn_type
+        self.rnn_type = args.rnn_type
         self.nhid = nhid
         self.nlayers = nlayers
 
@@ -60,10 +65,6 @@ class RNNModel(nn.Module):
         for i in range(self.num_channels):
             embs.append(self.drop(self.encoders[i](torch.t(inputs[i])))) 
         rnn_input = torch.cat(embs, dim=2) 
-        '''
-        for i in range(self.num_conditions):
-            rnn_input = torch.cat([rnn_input, torch.t(conditions[i]).contiguous().view(conditions[i].size(0),batch_size,1)], dim=2)
-        '''
         # packed_input = torch.nn.utils.rnn.pack_padded_sequence(emb, seq_lens, batch_first=True)
         output, hidden = self.rnn(rnn_input, hidden)
         # output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
@@ -86,25 +87,31 @@ class RNNModel(nn.Module):
 
 class CRNNModel(nn.Module):
     ''' Conditional RNN: in this case, we concat the conditions to the RNN input '''
-    def __init__(self, rnn_type, ntokens, emsize, nhid, nlayers, dropout=0.1):
-        '''
-        ntokens is a list of the numbers of tokens in the dictionary of each channel
-        '''
+    # TODO OOP.
+    def __init__(self, args):
         super(CRNNModel, self).__init__()
+        nhid = args.nhid
+        nlayers = args.nlayers
+        dropout = args.dropout
+        ntokens = args.ntokens
+
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
+        self.num_conditions = args.num_conditions
         for i in range(self.num_channels):
-            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], emsize)) 
-        if rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, rnn_type)(
-                emsize*self.num_channels + 1, nhid, nlayers, dropout=dropout)
+            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+        # conditions encoder
+        self.add_module('encoder_' + str(self.num_channels), nn.Embedding(args.num_conditions, args.emsize))
+        if args.rnn_type in ['LSTM', 'GRU']:
+            self.rnn = getattr(nn, args.rnn_type)(
+                args.emsize*(self.num_channels+1), nhid, nlayers, dropout=dropout)
         else:
             try:
-                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
+                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[args.rnn_type]
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(emsize, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+            self.rnn = nn.RNN(args.emsize, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
@@ -112,7 +119,7 @@ class CRNNModel(nn.Module):
 
         self.init_weights()
 
-        self.rnn_type = rnn_type
+        self.rnn_type = args.rnn_type
         self.nhid = nhid
         self.nlayers = nlayers
 
@@ -134,10 +141,12 @@ class CRNNModel(nn.Module):
         batch_size = inputs[0].size(0)
         for i in range(self.num_channels):
             # conditions[i] is batch_size x seqlen
-            # emb should be seqlen x batch_size x emsize
+            emb_c = self.encoders[self.num_channels](torch.t(conditions[i])) 
+            # inputs[i] is batch_size x seqlen
+            # emb should be seqlen x batch_size x args.emsize
             emb = self.encoders[i](torch.t(inputs[i]))
-            # concat embedding with condition for this channel, along the last axis
-            emb_cond = torch.cat([emb, torch.t(conditions[i]).unsqueeze(2)], dim=2)
+            # concat note embedding with condition embedding for this channel
+            emb_cond = torch.cat([emb, emb_c], dim=2)
             emb_conds.append(self.drop(emb_cond)) 
         rnn_input = torch.cat(emb_conds, dim=2) 
         # rnn_input = torch.cat([rnn_input, torch.t(conditions[i]).contiguous().view(conditions[i].size(0),batch_size,1)], dim=2)
@@ -165,25 +174,23 @@ class CRNNModel(nn.Module):
 class RNNCellModel(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
-    def __init__(self, rnn_type, ntokens, emsize, nhid, nlayers, dropout=0.1):
+    def __init__(self, args):
         super(RNNCellModel, self).__init__()
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
+        nhid = args.nhid
+        nlayers = args.nlayers
+        ntokens = args.ntokens
+
         for i in range(self.num_channels):
-            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], emsize)) 
-        if rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, rnn_type + 'Cell')(
-                emsize*self.num_channels, nhid, nlayers)
+            self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+        if args.rnn_type in ['LSTM', 'GRU']:
+            self.rnn = getattr(nn, args.rnn_type + 'Cell')(
+                args.emsize*self.num_channels, nhid, nlayers)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
         self.decoders = AttrProxy(self, 'decoder_') 
 
         self.init_weights()
-
-        self.rnn_type = rnn_type
-        self.nhid = nhid
-        self.nlayers = nlayers
 
     def init_weights(self):
         initrange = 0.1

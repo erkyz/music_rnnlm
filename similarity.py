@@ -24,9 +24,9 @@ def edit_distance(s1, s2):
 def diff(x):
     left, right = x
     if left[0] == 'rest' or right[0] == 'rest':
-        # temporary
+        # TODO temporary
         return (0, right[1])
-    # LOL this is awful
+    # TODO LOL this is awful
     if left[0] == 'padding' or right[0] == 'padding' or left[0] == 'measure' or right[0] == 'measure' or left[0] == 'end' or right[0] == 'end': 
         return (0, right[1])
     if pitch.Pitch(left[0]) == pitch.Pitch(right[0]):
@@ -100,11 +100,9 @@ def get_ssm(f, pdv):
     # plt.savefig('../similarities/' + args.melody + '.png')
 
 
-def get_note_sdm(melody, pdv, window):
+def get_note_sdm(melody, window):
     """ self-distance matrix """
-    ''' |pdv| must be a PDV'''
-    melody = [pdv.i2e[0][i].original for i in melody][1:]
-
+    ''' melody is a PDV melody '''
     differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
     rawDiffs = map(lambda x: x[0], differences)
 
@@ -114,6 +112,23 @@ def get_note_sdm(melody, pdv, window):
             sdm[i,j] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
 
     return sdm, rawDiffs
+
+
+def get_future_from_past(melody, args):
+    ''' get the prediction for the next value based on the most similar sequence in the past '''
+    ''' melody is a PDV melody ''' # TODO don't do that. lol.
+    sdm, diffs = get_note_sdm(melody, args.window)
+    # for each column, get the minimum before i
+    future_preds = []
+    for row in range(sdm.shape[0]-1):
+        if sdm[row][:row].size > 0 and np.amin(sdm[row][:row]) < args.distance_threshold:
+            # get whether the next note is up, down, or the same.
+            differential = diffs[row+1] # in {-1,0,1}
+            future_preds.append(differential)
+        else:
+            # otherwise, provide no information
+            future_preds.append(2)
+    return [x+1 for x in future_preds] # in {0,1,2,3}
 
 
 

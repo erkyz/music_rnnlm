@@ -175,7 +175,7 @@ class PitchDurationVocab(SimpleVocab):
                     measure_progress += e.duration.quarterLength
 		elif type(e) is music21.note.Rest:
 		    out.append((e.name, e.duration.quarterLength))
-                    measure_progress += e.duration.quarterLength
+            measure_progress += e.duration.quarterLength
             break # TODO this break will only work for Nottingham-like MIDI
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
         return out, measure_limit
@@ -194,21 +194,22 @@ class PitchDurationVocab(SimpleVocab):
         v.save(vocab_fname)
         return v
 
-    def events2mid(self, lists, out):
+    def events2mid(self, l, out):
+        # TODO this is a little strange because l will be a list of lists in our API
+        # to allow other classes to have multiple channels
         s = music21.stream.Stream()
-        l = zip(lists)
-        for e in l:
+        for e in l[0]:
             if e == self.special_events["end"]:
                 break
             if e in self.special_events.values():
                 continue
             n = music21.note.Note(e.original[0])
             n.quarterLength = e.original[1]
-            mf = music21.midi.translate.streamToMidiFile(s)
+            s.append(n)
+        mf = music21.midi.translate.streamToMidiFile(s)
         mf.open(out, 'wb')
         mf.write()
         mf.close()
-
 
 
 class FactorPitchDurationVocab(SimpleVocab):
@@ -259,7 +260,6 @@ class FactorPitchDurationVocab(SimpleVocab):
         s = music21.stream.Stream()
         l = zip(*lists)
         for pitch_event, duration_event in l:
-            print pitch_event.original, duration_event.original
             if pitch_event == self.special_events["end"] or duration_event == self.special_events["end"]:
                 break
             if pitch_event in self.special_events.values() or duration_event in self.special_events.values():
@@ -330,7 +330,6 @@ class FactorPDMVocab(SimpleVocab):
         s = music21.stream.Stream()
         l = zip(*lists)
         for pitch_event, duration_event, measure_progress in l:
-            print pitch_event.original, duration_event.original, measure_progress.original
             if pitch_event == self.special_events["end"] or duration_event == self.special_events["end"]:
                 break
             if pitch_event in self.special_events.values() or duration_event in self.special_events.values():

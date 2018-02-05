@@ -20,7 +20,7 @@ parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
 parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
-parser.add_argument('--max_events', type=int, default='100', # TODO
+parser.add_argument('--max_events', type=int, default='500',
                     help='number of words to generate')
 parser.add_argument('--num_out', type=int, default='10',
                     help='number of melodies to generate')
@@ -30,7 +30,7 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
-parser.add_argument('--temperature', type=float, default=1.0,
+parser.add_argument('--temperature', type=float, default=2.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='reporting interval')
@@ -77,9 +77,9 @@ def make_data_dict():
     Both outputs are lists of lists, one sublist for each channel
     '''
     data = {}
-    data["data"] = [Variable(torch.FloatTensor(args.beam_size, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
+    data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
     if args.arch == 'crnn':
-        data["conditions"] = [Variable(torch.LongTensor(args.beam_size, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
+        data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
     if args.cuda:
         for c in range(sv.num_channels):
             data["data"][c].data = data["data"][c].data.cuda()
@@ -128,64 +128,56 @@ else:
     corpusf = args.corpusf + '.p'
     sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
 
-hidden = model.init_hidden(args.beam_size) 
-gen_data = make_data_dict()
-events, conditions = get_events_and_conditions(sv)
 
-beam = beam_search.Beam(args.beam_size, sv, cuda=True)
-
-# word_idxs = None # TODO
-
-for t in range(args.max_events):
-    print ""
-    if beam.done: 
-        break
-
-    # Set the proper condition for this step
-    for c in range(sv.num_channels):
-        if args.arch == 'crnn':
-            if t < len(conditions[c]) or t == 0:
-                gen_data["conditions"][c].data.fill_(conditions[c][t]) # TODO
-            else:
-                gen_data["conditions"][c].data.fill_(0) # TODO # TODO 
-
-    for c in range(sv.num_channels):
-        if t < args.condition_notes:
-            gen_data["data"][c].data.fill_(events[c][t])
+for i in range(args.num_out):
+    torch.manual_seed(i)
+    if torch.cuda.is_available():
+        if not args.cuda:
+            print("WARNING: You have a CUDA device, so you should probably run with --cuda")
         else:
-            for i in range(args.beam_size):
-                # gen_data["data"][c][i] = word_idxs[c][0]
-                gen_data["data"][c][i] = beam.get_current_state(c)[i]
-    # wait, isn't the input supposed to be an event index?
+            torch.cuda.manual_seed(i) 
 
-    if args.arch == "hrnn":
-        outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-    else:
-        outputs, hidden = model(gen_data, hidden)
+    hidden = model.init_hidden(1) 
+    gen_data = make_data_dict()
+    events, conditions = get_events_and_conditions(sv)
 
-    word_weights = [F.softmax(outputs[c].squeeze(1).data.div(args.temperature)).contiguous() for c in range(sv.num_channels)]
-    word_idxs = [torch.multinomial(word_weights[c], 1)[0] for c in range(sv.num_channels)] # TODO option to sample.
+    generated_events = [[] * sv.num_channels] # TODO
 
-    # Starting from the last note in the notes we condition on, we should advance the beam.
-    # Before that, we're just conditioning.
-    if t >= args.condition_notes-1 and beam.advance(word_weights):
-        # If the beam search is complete, exit.
-        break
-    
-    ''' 
-    for c in range(sv.num_channels):
-        gen_data["data"][c].data.fill_(word_idxs[c])
-        if args.arch == 'crnn':
-            i = len(generated_events[c])
-            if i < len(conditions[c]):
-                gen_data["conditions"][c].data.fill_(conditions[c][i])
+    for t in range(args.max_events):
+        for c in range(sv.num_channels):
+            if args.arch == 'crnn':
+                if t < len(conditions[c]):
+                    gen_data["conditions"][c].data.fill_(conditions[c][t]) # TODO
+                else:
+                    gen_data["conditions"][c].data.fill_(0) # TODO # TODO 
+
+        for c in range(sv.num_channels):
+            if t < args.condition_notes:
+                gen_data["data"][c].data.fill_(events[c][t])
             else:
-                gen_data["conditions"][c].data.fill_(0)
-        generated_events[c].append(sv.i2e[c][word_idxs[c]])
-    if word_idxs[0] == sv.special_events["end"].i or word_idxs[0] == sv.special_events["end"].i:
-        break
-    ''' 
+                gen_data["data"][c].data.fill_(word_idxs[c])
 
+        if args.arch == "hrnn":
+            outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+        else:
+            outputs, hidden = model(gen_data, hidden)
+
+        # word_weights = [outputs[c].squeeze().data.div(args.temperature).exp().cpu() for c in range(sv.num_channels)]
+        # word_idxs = [torch.multinomial(word_weights[c], 1)[0] for c in range(sv.num_channels)]
+
+        word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
+        word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
+
+        for c in range(sv.num_channels):
+            generated_events[c].append(sv.i2e[c][word_idxs[c]])
+
+        if word_idxs[0] == sv.special_events["end"].i:
+            break
+
+    print [x.i for x in generated_events[0]]
+    sv.events2mid([generated_events[0]], "../../generated/" + args.outf + str(i) + '.mid')
+
+'''
 allHyp, allScores = [], []
 n_best = max(args.beam_size, 1)
 scores, ks = beam.sort_best()
@@ -196,4 +188,5 @@ for k in range(n_best):
     events = [[sv.i2e[c][hyp[c][i]] for i in range(len(hyp[c]))] for c in range(len(hyp))]
     print [[hyp[c][i] for i in range(len(hyp[c]))] for c in range(len(hyp))]
     sv.events2mid(events, "../../generated/" + args.outf + str(k) + '.mid')
+'''
 

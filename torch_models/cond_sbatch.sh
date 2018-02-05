@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100g
 #SBATCH -t 0
-#SBATCH -o ../../slurm-out/cond_torch.txt
+#SBATCH -o ../../slurm-out/cond_torch_4_2.txt
 
 set -x  # echo commands to stdout
 set -e  # exit on error
@@ -23,12 +23,15 @@ export LD_LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 export CPATH=/opt/cudnn-8.0/include:$CPATH
 export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 
-FILE_NAME="../tmp/base.pt"
+# REMEMBER TO CHANGE THE FILE NAME ABOVE AND BELOW.  
+FILE_NAME="../tmp/cond_4_2.pt"
 VOCABF="../tmp/cmaj_nott_sv"
 CORPUSF="../tmp/cmaj_nott_sv_corpus"
+OUTF="cond"
 DATA_DIR="../music_data/debug_data_small/" # note that because the corpus exists, this doesn't do anything
-CONDITION_MEASURES=0
-WINDOW=8
-DISTANCE_THRESHOLD=3
+CONDITION_NOTES=10
+WINDOW=4
+DISTANCE_THRESHOLD=2
 # NO PROGRESS TOKENS IF YOU WANT TO DO CRNN
-python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD --arch='crnn' 
+# python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD --arch='crnn' 
+python generate.py --cuda --outf=$OUTF --checkpoint=$FILE_NAME --vocabf=$VOCABF --corpusf=$CORPUSF --num_out=10 --condition_piece="../music_data/CMaj_Nottingham/valid/jigs_simple_chords_16.mid" --condition_notes=$CONDITION_NOTES --arch='crnn' --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD 
