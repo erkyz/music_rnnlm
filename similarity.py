@@ -99,6 +99,7 @@ def get_ssm(f, pdv):
     # plt.imshow(dist_matrix, cmap='gray', interpolation='nearest')
     # plt.savefig('../similarities/' + args.melody + '.png')
 
+LARGE_DISTANCE = 20
 
 def get_note_sdm(melody, window):
     """ self-distance matrix """
@@ -106,12 +107,26 @@ def get_note_sdm(melody, window):
     differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
     rawDiffs = map(lambda x: x[0], differences)
 
-    sdm = np.ones([len(differences), len(differences)]) * 20 # "default" distance 
+    sdm = np.ones([len(differences), len(differences)]) * LARGE_DISTANCE
     for i in xrange(window-1, len(differences)):
         for j in xrange(window-1, len(differences)):
             sdm[i,j] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
 
     return sdm, rawDiffs
+
+def get_min_past_distance(melody, args):
+    ''' get the index for the event in the past that's most similar to the current event, '''
+    ''' for every event '''
+    sdm, _ = get_note_sdm(melody, args.window)
+    prev_idxs = []
+    # for each column, get the minimum before i
+    for row in range(sdm.shape[0]-1):
+        if sdm[row][:row].size > 0 and np.amin(sdm[row][:row]) < args.distance_threshold:
+            prev_idxs.append(np.argmin(sdm[row][:row]))
+        else:
+            # provide no information
+            prev_idxs.append(-1)
+    return prev_idxs
 
 
 def get_future_from_past(melody, args):
@@ -122,8 +137,9 @@ def get_future_from_past(melody, args):
     future_preds = []
     for row in range(sdm.shape[0]-1):
         if sdm[row][:row].size > 0 and np.amin(sdm[row][:row]) < args.distance_threshold:
-            # get whether the next note is up, down, or the same.
-            differential = diffs[row+1] # in {-1,0,1}
+            prev_idx = np.argmin(sdm[row][:row])
+            # get whether the next note is predicted to be up, down, or the same.
+            differential = diffs[prev_idx+1] # in {-1,0,1}
             future_preds.append(differential)
         else:
             # otherwise, provide no information

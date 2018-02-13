@@ -149,7 +149,7 @@ class SimpleVocab(object):
 
 
 class PitchDurationVocab(SimpleVocab):
-    def __init__(self, include_measure_tokens=True):
+    def __init__(self, include_measure_tokens=False):
         super(PitchDurationVocab, self).__init__(num_channels=1) 
         self.special_events = {
                 "padding": self.add_event_to_all((PADDING_NAME, PADDING_NAME)),
@@ -181,10 +181,10 @@ class PitchDurationVocab(SimpleVocab):
         return out, measure_limit
 
     @classmethod
-    def load_from_corpus(clss, path, vocab_fname):
+    def load_from_corpus(clss, path, vocab_fname, include_measure_tokens=False):
         if os.path.isfile(vocab_fname):
             return clss.load(vocab_fname)
-        v = clss()
+        v = clss(include_measure_tokens)
         filenames = getmidfiles(path) 
         for filename in filenames:
             events = clss.mid2orig(filename)

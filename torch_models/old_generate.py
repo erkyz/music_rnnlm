@@ -30,7 +30,7 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
-parser.add_argument('--temperature', type=float, default=2.0,
+parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--log-interval', type=int, default=100,
                     help='reporting interval')
@@ -98,11 +98,11 @@ def get_events_and_conditions(sv):
     for channel in range(sv.num_channels):
         curr_note = 0
         origs, _ = sv.mid2orig(args.condition_piece, channel)
-        channel_conditions[channel] = similarity.get_future_from_past(origs[1:], args)
+        channel_conditions[channel] = similarity.get_min_past_distance(origs[1:], args)
 
         for orig in origs:
             if orig[0] == "rest":
-                continue # TODO
+                continue # TODO 
             event = sv.orig2e[channel][orig]
             channel_events[channel].append(event)
             curr_note += 1
@@ -128,8 +128,10 @@ else:
     corpusf = args.corpusf + '.p'
     sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
 
+NO_INFO_EVENT_IDX = 3
 
 for i in range(args.num_out):
+    print ""
     torch.manual_seed(i)
     if torch.cuda.is_available():
         if not args.cuda:
@@ -145,11 +147,12 @@ for i in range(args.num_out):
 
     for t in range(args.max_events):
         for c in range(sv.num_channels):
-            if args.arch == 'crnn':
-                if t < len(conditions[c]):
-                    gen_data["conditions"][c].data.fill_(conditions[c][t]) # TODO
-                else:
-                    gen_data["conditions"][c].data.fill_(0) # TODO # TODO 
+            fill_val = NO_INFO_EVENT_IDX
+            if args.arch == 'crnn' and t < len(conditions[c]):
+                prev_idx = conditions[c][t]
+                if prev_idx != -1 and prev_idx < len(generated_events[c])-1:
+                    fill_val = similarity.diff((generated_events[c][prev_idx].original,generated_events[c][prev_idx+1].original))[0]+1
+            gen_data["conditions"][c].data.fill_(fill_val)
 
         for c in range(sv.num_channels):
             if t < args.condition_notes:
@@ -162,19 +165,18 @@ for i in range(args.num_out):
         else:
             outputs, hidden = model(gen_data, hidden)
 
-        # word_weights = [outputs[c].squeeze().data.div(args.temperature).exp().cpu() for c in range(sv.num_channels)]
-        # word_idxs = [torch.multinomial(word_weights[c], 1)[0] for c in range(sv.num_channels)]
-
         word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
         word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
-
         for c in range(sv.num_channels):
-            generated_events[c].append(sv.i2e[c][word_idxs[c]])
+            if t < args.condition_notes:
+                generated_events[c].append(sv.i2e[c][events[c][t]])
+            else:
+                generated_events[c].append(sv.i2e[c][word_idxs[c]])
 
-        if word_idxs[0] == sv.special_events["end"].i:
+        if t >= args.condition_notes and word_idxs[0] == sv.special_events["end"].i:
             break
 
-    print [x.i for x in generated_events[0]]
+    print i, [x.i for x in generated_events[0]]
     sv.events2mid([generated_events[0]], "../../generated/" + args.outf + str(i) + '.mid')
 
 '''

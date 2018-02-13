@@ -156,7 +156,6 @@ for t in range(args.max_events):
             for i in range(args.beam_size):
                 # gen_data["data"][c][i] = word_idxs[c][0]
                 gen_data["data"][c][i] = beam.get_current_state(c)[i]
-    # wait, isn't the input supposed to be an event index?
 
     if args.arch == "hrnn":
         outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
