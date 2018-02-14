@@ -23,12 +23,17 @@ PADDING = 0
 
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
+# Data stuff
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
                     help='location of the saved vocabulary, or where to save it')
 parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
                     help='location of the saved corpus, or where to save it')
+parser.add_argument('--save', type=str,  default='../tmp/model.pt',
+                    help='path to save the final model')
+
+# RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--arch', type=str, default='base')
@@ -46,31 +51,39 @@ parser.add_argument('--epochs', type=int, default=40,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                     help='batch size')
-parser.add_argument('--skip_first_n_bar_losses', type=int, default=2, metavar='N',
-                    help='"encode" first n bars')
 parser.add_argument('--dropout', type=float, default=0.1,
                     help='dropout applied to layers (0 = no dropout)')
 parser.add_argument('--tied', action='store_true',
                     help='tie the word embedding and softmax weights')
 parser.add_argument('--factorize', action='store_true',
                     help='whether to factorize embeddings')
+
+# Stuff for measure splitting
 parser.add_argument('--progress_tokens', action='store_true',
                     help='whether to condition on the amount of time left until the end \
                             of the measure')
 parser.add_argument('--measure_tokens', action='store_true',
                     help='whether to have a token in between measures')
+
+# Stuff for diagonal detection
 parser.add_argument('--window', type=int, default=8,
                     help='window size for note-based moving edit distances')
+parser.add_argument('--c', type=int, default=2,
+                    help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
+parser.add_argument('--most_recent', action='store_true',
+                    help='whether we repeat the most recent similar or earliest similar')
+
+# Meta-training stuff
+parser.add_argument('--skip_first_n_bar_losses', type=int, default=2, metavar='N',
+                    help='"encode" first n bars')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
-parser.add_argument('--save', type=str,  default='../tmp/model.pt',
-                    help='path to save the final model')
 args = parser.parse_args()
 
 print args
@@ -108,12 +121,12 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     for i in range(this_bsz):
         # TODO shouldn't be channel 0...
         melody = [sv.i2e[0][i].original for i in source_slice[i]][1:]
-        batch_conditions = similarity.get_future_from_past(melody, args)
+        batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
         data[i] = pad(torch.LongTensor(source_slice[i]), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
         conditions[i] = pad(torch.LongTensor(batch_conditions), maxlen) 
-        t = target_slice[i] 
+        t = target_slice[i]
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
         for j in xrange(second_measure_idx):
@@ -173,6 +186,9 @@ def batchify(source, bsz, sv):
     return batch_data
    
 t = time.time()
+if args.measure_tokens:
+    args.vocabf += '_mt'
+    args.corpusf += '_mt'
 if args.factorize:
     if args.progress_tokens:
         vocabf = args.vocabf + '_factorized_measuretokens.p'
@@ -191,7 +207,10 @@ corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf)
 print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = '../tmp/train_batch_data_w' + str(args.window) + 'dt' + str(args.distance_threshold) + args.arch + '.p'
+f = '../tmp/train_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) + args.arch
+if args.most_recent:
+    f += 'recent_first'
+f += '.p'
 if os.path.isfile(f):
     print "Load existing train data", f
     train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
@@ -217,9 +236,10 @@ args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
 if args.arch == "hrnn":
     model = hrnnlm.FactorHRNNModel(args)
 elif args.arch == "crnn":
-    model = rnnlm.CRNNModel(args)
+    model = rnnlm.XRNNModel(args) # TODO
 else:
     model = rnnlm.RNNModel(args)
+print model
 
 if args.cuda:
     model.cuda()
@@ -273,7 +293,7 @@ def evaluate(eval_data, mb_indices):
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
-    return total_loss[0] / len(eval_data["data"]) # num batches
+    return total_loss / len(eval_data["data"]) # num batches, TODO
 
 def train():
     # Turn on training mode which enables dropout.
@@ -303,18 +323,8 @@ def train():
             p.data.add_(-lr, p.grad.data)
 
         total_loss += loss.data
-
-        if batch % args.log_interval == 0 and batch > 0:
-            cur_loss = total_loss[0] / args.log_interval
-            elapsed = time.time() - start_time
-            print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                    'loss {:5.2f} | ppl {:8.2f}'.format(
-                epoch, batch, len(corpus.train) // corpus.train_maxlen, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
-            total_loss = 0
-            start_time = time.time()
-
-    return total_loss[0] / len(train_data["data"]
+    
+    return total_loss / len(train_data["data"]) # TODO total_loss[0] sometimes.
 
 # Loop over epochs.
 lr = args.lr

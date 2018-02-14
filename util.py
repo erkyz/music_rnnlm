@@ -1,3 +1,4 @@
+from __future__ import division
 import pickle, midi, math, os
 import music21
 import numpy as np
@@ -150,7 +151,8 @@ class SimpleVocab(object):
 
 class PitchDurationVocab(SimpleVocab):
     def __init__(self, include_measure_tokens=False):
-        super(PitchDurationVocab, self).__init__(num_channels=1) 
+        super(PitchDurationVocab, self).__init__(num_channels=1)
+        self.include_measure_tokens = include_measure_tokens 
         self.special_events = {
                 "padding": self.add_event_to_all((PADDING_NAME, PADDING_NAME)),
                 "start": self.add_event_to_all((START_OF_TRACK_NAME, START_OF_TRACK_NAME)),
@@ -159,7 +161,7 @@ class PitchDurationVocab(SimpleVocab):
                 }
 
     @classmethod
-    def mid2orig(clss, midf, channel=0, include_measure_boundaries=True):
+    def mid2orig(clss, midf, channel=0):
         score = music21.converter.parse(midf)
         out = [(START_OF_TRACK_NAME, START_OF_TRACK_NAME)]
         time_signature = get_ts(score)
@@ -167,7 +169,7 @@ class PitchDurationVocab(SimpleVocab):
         measure_limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         for part in score:
             for e in part:
-                if measure_progress >= measure_limit and include_measure_boundaries:
+                if measure_progress >= measure_limit and self.include_measure_boundaries:
                     out.append((MEASURE_NAME, MEASURE_NAME))
                     measure_progress -= measure_limit
                 if type(e) is music21.note.Note:
@@ -187,7 +189,7 @@ class PitchDurationVocab(SimpleVocab):
         v = clss(include_measure_tokens)
         filenames = getmidfiles(path) 
         for filename in filenames:
-            events = clss.mid2orig(filename)
+            events, _ = clss.mid2orig(filename)
             for event in events:
                 v.add_event_to_all(event)
         print "PitchDurationVocab sizes:", v.sizes
@@ -213,8 +215,9 @@ class PitchDurationVocab(SimpleVocab):
 
 
 class FactorPitchDurationVocab(SimpleVocab):
-    def __init__(self):
+    def __init__(self, include_measure_boundaries=False):
         super(FactorPitchDurationVocab, self).__init__(num_channels=2) 
+        self.include_measure_boundaries = include_measure_boundaries
         self.special_events = {
                 "padding": self.add_event_to_all(PADDING_NAME),
                 "start": self.add_event_to_all(START_OF_TRACK_NAME),
@@ -223,7 +226,7 @@ class FactorPitchDurationVocab(SimpleVocab):
                 }
 
     @classmethod
-    def mid2orig(clss, midf, channel, include_measure_boundaries=True):
+    def mid2orig(clss, midf, channel):
         score = music21.converter.parse(midf)
         out = [START_OF_TRACK_NAME]
         time_signature = get_ts(score)
@@ -249,7 +252,7 @@ class FactorPitchDurationVocab(SimpleVocab):
         filenames = getmidfiles(path) 
         for filename in filenames:
             for channel in range(2):
-                events = clss.mid2orig(filename, channel)
+                events, _ = clss.mid2orig(filename, channel)
                 for event in events:
                     v.add_event_to_channel(event, channel)
         print "FactorPitchDurationVocab sizes:", v.sizes
@@ -276,8 +279,9 @@ class FactorPitchDurationVocab(SimpleVocab):
 class FactorPDMVocab(SimpleVocab):
     ''' pitch, duration, and measure progress channels '''
     ''' measure progress is how many more quarterLengths we have to go in the measure.'''
-    def __init__(self):
+    def __init__(self, include_measure_boundaries):
         super(FactorPDMVocab, self).__init__(num_channels=3) 
+        self.include_measure_boundaries = include_measure_boundaries
         self.special_events = {
                 "padding": self.add_event_to_all(PADDING_NAME),
                 "start": self.add_event_to_all(START_OF_TRACK_NAME),
@@ -288,7 +292,7 @@ class FactorPDMVocab(SimpleVocab):
         self.measure_channel = 2
 
     @classmethod
-    def mid2orig(clss, midf, channel, include_measure_boundaries=True):
+    def mid2orig(clss, midf, channel):
         score = music21.converter.parse(midf)
         out = [START_OF_TRACK_NAME]
         time_signature = get_ts(score)
@@ -296,7 +300,7 @@ class FactorPDMVocab(SimpleVocab):
         measure_limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         for part in score:
             for e in part:
-                if measure_progress >= measure_limit and include_measure_boundaries:
+                if measure_progress >= measure_limit and self.include_measure_boundaries:
                     out.append(MEASURE_NAME)
                     measure_progress -= measure_limit
                 if type(e) is music21.note.Note:

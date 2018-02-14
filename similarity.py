@@ -6,21 +6,72 @@ import matplotlib.pyplot as plt
 
 import util
 
+def call_counter(func):
+    def helper(*args, **kwargs):
+        helper.calls += 1
+        return func(*args, **kwargs)
+    helper.calls = 0
+    helper.__name__= func.__name__
+    return helper
+def memoize(func):
+    mem = {}
+    def memoizer(*args, **kwargs):
+        key = str(args) + str(kwargs)
+        if key not in mem:
+            mem[key] = func(*args, **kwargs)
+        return mem[key]
+    return memoizer
+@call_counter
+@memoize   
+def edit_distance(src, dst):
+    if not dst: return len(src)
+    if not src: return len(dst)
 
-def edit_distance(s1, s2):
-    m=len(s1)+1
-    n=len(s2)+1
+    return min(
+            # Case 1
+            (edit_distance(src[:-1], dst[:-1]) + (1, 0)[src[-1] == dst[-1]]),
+            # Case 2
+            (edit_distance(src[:-1], dst) + 1),
+            # Case 3
+            (edit_distance(src, dst[:-1]) + 1)
+    ) 
 
-    tbl = {}
-    for i in range(m): tbl[i,0]=i
-    for j in range(n): tbl[0,j]=j
-    for i in range(1, m):
-        for j in range(1, n):
-            cost = 0 if s1[i-1] == s2[j-1] else 1
-            tbl[i,j] = min(tbl[i, j-1]+1, tbl[i-1, j]+1, tbl[i-1, j-1]+cost)
 
-    return tbl[i,j]
+# padding = 0
+# right before measure = 1
+# right after measure = 2
+# right before rest = 3
+# right after rest = 4
+# stay = 5
+# up = 6
+# down = 7
 
+def diff(x):
+    left, right = x
+    if left[0] == 'rest': return (3, right[1])
+    if right[0] == 'rest': return (4, right[1])
+    if left[0] == 'measure': return (2, right[1])
+    if right[0] == 'measure': return (1, right[1])
+    if left[0] == 'padding' or right[0] == 'padding': return (0, right[1])
+    if pitch.Pitch(left[0]) == pitch.Pitch(right[0]):
+        return (5, right[1])
+    else:
+        diff = 6 if pitch.Pitch(left[0]) < pitch.Pitch(right[0]) else 7
+    return (diff, right[1])
+
+def get_avg_dist_between_measures(melody, sv):
+    print melody
+    measure_counts = []
+    c = 0
+    for m, _ in melody:
+        if m == 'measure':
+            measure_counts += [c]
+            c = 0
+        else:
+            c += 1
+    return sum(measure_counts)/len(measure_counts)
+
+'''
 def diff(x):
     left, right = x
     if left[0] == 'rest' or right[0] == 'rest':
@@ -34,6 +85,7 @@ def diff(x):
     else:
         diff = -1 if pitch.Pitch(left[0]) < pitch.Pitch(right[0]) else 1
     return (diff, right[1])
+'''
 
 pdv = util.PitchDurationVocab()
 
@@ -113,6 +165,40 @@ def get_note_sdm(melody, window):
             sdm[i,j] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
 
     return sdm, rawDiffs
+
+def get_note_ssm(melody, args):
+    """ self-distance matrix """
+    ''' melody is a PDV melody '''
+    differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
+    rawDiffs = map(lambda x: x[0], differences)
+
+    ssm = np.zeros([len(differences), len(differences)]) 
+    for i in xrange(args.window-1, len(differences)):
+        for j in xrange(args.window-1, len(differences)):
+            # TODO this is maybe temporary, just do 1's and 0's
+            ssm[i,j] = 1 if edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold else 0
+
+    return ssm, rawDiffs
+
+MIN_WINDOW = 6
+
+def get_prev_match_idx(melody, args, sv):
+    args.window = max(args.c*int(get_avg_dist_between_measures(melody, sv)), MIN_WINDOW)
+    ssm, _ = get_note_ssm(melody, args)
+    prev_idxs = []
+    # scan left to right. simplified for now to only 0's and 1's, so simpler here too.
+    for col in range(ssm.shape[0]-1):
+        row_order = range(0,col)
+        if args.most_recent:
+            row_order = reversed(row_order)
+        for row in row_order:
+            if ssm[row][col] == 1:
+                prev_idxs.append(row)
+                break
+        if len(prev_idxs) == col:
+            prev_idxs.append(-1)
+    return prev_idxs
+
 
 def get_min_past_distance(melody, args):
     ''' get the index for the event in the past that's most similar to the current event, '''
