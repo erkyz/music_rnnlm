@@ -13,7 +13,7 @@ import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import rnnlm, hrnnlm
+import rnnlm, rnncell_lm, hrnnlm
 import data
 import similarity
 import util
@@ -118,20 +118,22 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     conditions = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
-    for i in range(this_bsz):
+    for b in range(this_bsz):
         # TODO shouldn't be channel 0...
-        melody = [sv.i2e[0][i].original for i in source_slice[i]][1:]
+        melody = [sv.i2e[0][i].original for i in source_slice[b]][1:]
         batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
-        data[i] = pad(torch.LongTensor(source_slice[i]), maxlen)
+        data[b] = pad(torch.LongTensor(source_slice[b]), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
-        conditions[i] = pad(torch.LongTensor(batch_conditions), maxlen) 
-        t = target_slice[i]
+        conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen) 
+        t = target_slice[b]
+        '''
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
         for j in xrange(second_measure_idx):
             t[j] = PADDING
-        target[i] = pad(torch.LongTensor(t), maxlen)
+        '''
+        target[b] = pad(torch.LongTensor(t), maxlen)
     if args.cuda: 
         data = data.cuda()
         conditions = conditions.cuda()
@@ -170,13 +172,13 @@ def batchify(source, bsz, sv):
         channel_batches = []
         channel_targets = []
         channel_conditions = []
-        for batch in range(len(source[channel])/bsz):
+        for batch_idx in range(int(len(source[channel])/bsz)):
             if args.arch == 'crnn':
                 data, conditions, target, = \
-                    get_batch_with_conditions(source[channel], batch, bsz, sv) 
+                    get_batch_with_conditions(source[channel], batch_idx, bsz, sv)
                 channel_conditions.append(conditions)
             else:
-                data, target = get_batch(source[channel], batch, bsz, sv) 
+                data, target = get_batch(source[channel], batch_idx, bsz, sv) 
             channel_batches.append(data)
             channel_targets.append(target)
         batch_data["data"].append(channel_batches)
@@ -201,9 +203,9 @@ if args.factorize:
 else:
     vocabf = args.vocabf + '.p'
     corpusf = args.corpusf + '.p'
-    sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf, args.measure_tokens)
+    sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
 
-corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf)
+corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args.measure_tokens)
 print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
@@ -236,7 +238,7 @@ args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
 if args.arch == "hrnn":
     model = hrnnlm.FactorHRNNModel(args)
 elif args.arch == "crnn":
-    model = rnnlm.XRNNModel(args) # TODO
+    model = rnnlm.XRNNModel(args) 
 else:
     model = rnnlm.RNNModel(args)
 print model
@@ -263,6 +265,7 @@ def repackage_hidden(h):
 def get_batch_variables(batches, batch, evaluation=False):
     ''' Size of |batches|: num_channels * num_batches * num_examples_in_batch_i '''
     batch_data = {}
+    # batches is a dict
     for key in batches:
         batch_data[key] = []
     num_channels = len(batches["data"])
@@ -293,7 +296,7 @@ def evaluate(eval_data, mb_indices):
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
-    return total_loss / len(eval_data["data"]) # num batches, TODO
+    return total_loss[0] / len(eval_data["data"][0]) # num batches, TODO
 
 def train():
     # Turn on training mode which enables dropout.
@@ -324,7 +327,7 @@ def train():
 
         total_loss += loss.data
     
-    return total_loss / len(train_data["data"]) # TODO total_loss[0] sometimes.
+    return total_loss[0] / len(train_data["data"][0]) 
 
 # Loop over epochs.
 lr = args.lr

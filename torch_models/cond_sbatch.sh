@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100g
 #SBATCH -t 0
-#SBATCH -o ../../slurm-out/cond_torch.txt
+#SBATCH -o ../../slurm-out/cond_torch_2_1.txt
 
 set -x  # echo commands to stdout
 set -e  # exit on error
@@ -30,10 +30,10 @@ DATA_DIR="../music_data/CMaj_Nottingham/"
 # DATA_DIR="../music_data/debug_data_small/" 
 CONDITION_NOTES=8
 C=2
-DISTANCE_THRESHOLD=0
-# REMEMBER TO CHANGE THE FILE NAME ABOVE AND BELOW.  
+DISTANCE_THRESHOLD=1
+# TODO REMEMBER TO CHANGE THE FILE NAME ABOVE AND BELOW.  
 FILE_NAME="../tmp/cond_"$C"_"$DISTANCE_THRESHOLD".pt"
 TEMPERATURE=1.0
 # NO PROGRESS TOKENS IF YOU WANT TO DO CRNN
-python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch='crnn' --measure_tokens
+python train.py --cuda --save=$FILE_NAME --epochs=60 --nhid=1024 --data=$DATA_DIR --vocabf=$VOCABF --corpusf=$CORPUSF --emsize=10 --batch_size=64 --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch='crnn' --measure_tokens 
 # python old_generate.py --cuda --outf=$OUTF --checkpoint=$FILE_NAME --vocabf=$VOCABF --corpusf=$CORPUSF --num_out=10 --condition_piece="../music_data/CMaj_Nottingham/valid/jigs_simple_chords_16.mid" --condition_notes=$CONDITION_NOTES --arch='crnn' --window=$WINDOW --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE

@@ -52,7 +52,8 @@ def diff(x):
     if right[0] == 'rest': return (4, right[1])
     if left[0] == 'measure': return (2, right[1])
     if right[0] == 'measure': return (1, right[1])
-    if left[0] == 'padding' or right[0] == 'padding': return (0, right[1])
+    if left[0] == 'padding' or right[0] == 'padding' or left[0] == 'end' or right[0] == 'end': 
+        return (0, right[1])
     if pitch.Pitch(left[0]) == pitch.Pitch(right[0]):
         return (5, right[1])
     else:
@@ -60,7 +61,6 @@ def diff(x):
     return (diff, right[1])
 
 def get_avg_dist_between_measures(melody, sv):
-    print melody
     measure_counts = []
     c = 0
     for m, _ in melody:
@@ -161,8 +161,8 @@ def get_note_sdm(melody, window):
 
     sdm = np.ones([len(differences), len(differences)]) * LARGE_DISTANCE
     for i in xrange(window-1, len(differences)):
-        for j in xrange(window-1, len(differences)):
-            sdm[i,j] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
+        for j in xrange(i, len(differences)):
+            sdm[i,j] = sdm[j,i] = edit_distance(rawDiffs[i-window:i], rawDiffs[j-window:j])
 
     return sdm, rawDiffs
 
@@ -174,9 +174,9 @@ def get_note_ssm(melody, args):
 
     ssm = np.zeros([len(differences), len(differences)]) 
     for i in xrange(args.window-1, len(differences)):
-        for j in xrange(args.window-1, len(differences)):
+        for j in xrange(i, len(differences)):
             # TODO this is maybe temporary, just do 1's and 0's
-            ssm[i,j] = 1 if edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold else 0
+            ssm[i,j] = ssm[j,i] = 1 if edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold else 0
 
     return ssm, rawDiffs
 

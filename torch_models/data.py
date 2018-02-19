@@ -13,7 +13,7 @@ class Corpus(object):
         self.valids = [[]]
         self.tests = [[]]
 
-    def eventize(self, path):
+    def eventize(self, path, include_measure_boundaries):
         ''' returns a list of lists, where each list is a single channel. '''
         assert os.path.exists(path)
 
@@ -22,7 +22,7 @@ class Corpus(object):
         melodies = [[] for _ in range(self.vocab.num_channels)]
         for f in util.getmidfiles(path):
             for c in range(self.vocab.num_channels):
-                melody, _ = self.vocab.mid2orig(f, channel=c)
+                melody, _ = self.vocab.mid2orig(f, include_measure_boundaries, channel=c)
                 if len(melody) < 10 or len(melody) > 450:
                     continue
                 melodies[c].append(
@@ -55,7 +55,7 @@ class Corpus(object):
         return corpus
 
     @classmethod
-    def load_from_corpus(clss, path, vocab, vocab_fname, corpus_fname):
+    def load_from_corpus(clss, path, vocab, vocab_fname, corpus_fname, include_measure_boundaries):
         if os.path.isfile(corpus_fname):
             print "Loading existing Corpus", corpus_fname
             return clss.load(corpus_fname)
@@ -64,9 +64,9 @@ class Corpus(object):
         corpus.vocab = vocab
         corpus.vocab_fname = vocab_fname
         corpus.my_fname = corpus_fname
-        corpus.trains = corpus.eventize(os.path.join(path, 'train'))
-        corpus.valids = corpus.eventize(os.path.join(path, 'valid'))
-        corpus.tests = corpus.eventize(os.path.join(path, 'test'))
+        corpus.trains = corpus.eventize(os.path.join(path, 'train'), include_measure_boundaries)
+        corpus.valids = corpus.eventize(os.path.join(path, 'valid'), include_measure_boundaries)
+        corpus.tests = corpus.eventize(os.path.join(path, 'test'), include_measure_boundaries)
 
         print "Saving new Corpus", corpus_fname
         corpus.save()
