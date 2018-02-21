@@ -100,6 +100,8 @@ if torch.cuda.is_available():
 # Load data
 ###############################################################################
 
+CONDITIONALS = {'crnn', 'vine'}
+
 def nth_item_index(n, item, iterable):
     if n == -1:
         return 0
@@ -111,7 +113,7 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     def pad(tensor, length):
         return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
     start_idx = batch * bsz
-    this_bsz = min(bsz, (len(source) - start_idx - 1))
+    this_bsz = min(bsz, (len(source) - start_idx)) # TODO why was there a -1 here?
     source_slice = source[start_idx:start_idx+this_bsz]
     target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
     maxlen = len(source_slice[0])
@@ -166,14 +168,14 @@ def get_batch(source, batch, bsz, sv):
 
 def batchify(source, bsz, sv):
     batch_data = {"data": [], "targets": []}
-    if args.arch == 'crnn':
+    if args.arch in CONDITIONALS:
         batch_data["conditions"] = []
     for channel in range(len(source)):
         channel_batches = []
         channel_targets = []
         channel_conditions = []
         for batch_idx in range(int(len(source[channel])/bsz)):
-            if args.arch == 'crnn':
+            if args.arch in CONDITIONALS:
                 data, conditions, target, = \
                     get_batch_with_conditions(source[channel], batch_idx, bsz, sv)
                 channel_conditions.append(conditions)
@@ -183,7 +185,7 @@ def batchify(source, bsz, sv):
             channel_targets.append(target)
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
-        if args.arch == 'crnn':
+        if args.arch in CONDITIONALS:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
    
@@ -209,9 +211,11 @@ corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args.measu
 print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = '../tmp/train_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) + args.arch
+f = '../tmp/train_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) 
 if args.most_recent:
-    f += 'recent_first'
+    f += '_recent_first'
+if args.arch in CONDITIONALS:
+    f += '_condmod'
 f += '.p'
 if os.path.isfile(f):
     print "Load existing train data", f
@@ -330,7 +334,10 @@ def train():
             p.data.add_(-lr, p.grad.data)
 
         total_loss += loss.data
-    
+   
+    print total_loss
+    print train_data
+
     return total_loss[0] / len(train_data["data"]) # TODO THIS IS NOT THE NUM BATCHES
 
 # Loop over epochs.

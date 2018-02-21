@@ -234,6 +234,7 @@ class VineRNNModel(nn.Module):
         rnn_input = torch.cat(embs, dim=2)
         prev_hs = [hidden]
         if self.rnn_type == 'LSTM':
+            # TODO 
             copied_hs = [Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_()),
                           Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())]
         else:
