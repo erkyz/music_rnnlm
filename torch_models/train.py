@@ -120,7 +120,7 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
-        melody = [sv.i2e[0][i].original for i in source_slice[b]][1:]
+        melody = [sv.i2e[0][i].original for i in source_slice[b]][1:] # remove START
         batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
         data[b] = pad(torch.LongTensor(source_slice[b]), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.

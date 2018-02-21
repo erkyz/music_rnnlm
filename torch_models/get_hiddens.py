@@ -159,12 +159,14 @@ for i in range(args.num_out):
     for t in range(len(events[0])):
         for c in range(sv.num_channels):
             fill_val = NO_INFO_EVENT_IDX
+            '''
             if args.arch == 'crnn' and t < len(conditions[c]):
                 prev_idx = conditions[c][t]
                 # TODO make this work for CRNN.
                 if prev_idx != -1 and prev_idx < len(generated_events[c])-1:
                     fill_val = similarity.diff((generated_events[c][prev_idx].original,generated_events[c][prev_idx+1].original))[0]+1
             gen_data["conditions"][c].data.fill_(fill_val)
+            '''
 
         for c in range(sv.num_channels):
             gen_data["data"][c].data.fill_(events[c][t])
