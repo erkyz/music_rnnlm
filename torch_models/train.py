@@ -238,7 +238,11 @@ args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
 if args.arch == "hrnn":
     model = hrnnlm.FactorHRNNModel(args)
 elif args.arch == "crnn":
-    model = rnnlm.XRNNModel(args) 
+    model = rnncell_lm.XRNNModel(args) 
+elif args.arch == "cell":
+    model = rnncell_lm.RNNCellModel(args) 
+elif args.arch == "vine":
+    model = rnncell_lm.VineRNNModel(args) 
 else:
     model = rnnlm.RNNModel(args)
 print model
@@ -296,7 +300,7 @@ def evaluate(eval_data, mb_indices):
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
-    return total_loss[0] / len(eval_data["data"][0]) # num batches, TODO
+    return total_loss[0] / len(eval_data["data"]) # num batches, TODO THIS IS WRONG 
 
 def train():
     # Turn on training mode which enables dropout.
@@ -327,7 +331,7 @@ def train():
 
         total_loss += loss.data
     
-    return total_loss[0] / len(train_data["data"][0]) 
+    return total_loss[0] / len(train_data["data"]) # TODO THIS IS NOT THE NUM BATCHES
 
 # Loop over epochs.
 lr = args.lr
