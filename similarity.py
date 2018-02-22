@@ -71,21 +71,6 @@ def get_avg_dist_between_measures(melody, sv):
             c += 1
     return sum(measure_counts)/len(measure_counts)
 
-'''
-def diff(x):
-    left, right = x
-    if left[0] == 'rest' or right[0] == 'rest':
-        # TODO temporary
-        return (0, right[1])
-    # TODO LOL this is awful
-    if left[0] == 'padding' or right[0] == 'padding' or left[0] == 'measure' or right[0] == 'measure' or left[0] == 'end' or right[0] == 'end': 
-        return (0, right[1])
-    if pitch.Pitch(left[0]) == pitch.Pitch(right[0]):
-        diff = 0
-    else:
-        diff = -1 if pitch.Pitch(left[0]) < pitch.Pitch(right[0]) else 1
-    return (diff, right[1])
-'''
 
 pdv = util.PitchDurationVocab()
 
@@ -183,7 +168,6 @@ def get_note_ssm(melody, args):
 MIN_WINDOW = 6
 
 def get_prev_match_idx(melody, args, sv):
-    args.window = max(args.c*int(get_avg_dist_between_measures(melody, sv)), MIN_WINDOW)
     ssm, _ = get_note_ssm(melody, args)
     prev_idxs = []
     # scan left to right. simplified for now to only 0's and 1's, so simpler here too.
@@ -231,6 +215,5 @@ def get_future_from_past(melody, args):
             # otherwise, provide no information
             future_preds.append(2)
     return [x+1 for x in future_preds] # in {0,1,2,3}
-
 
 

@@ -139,7 +139,10 @@ class XRNNModel(nn.Module):
             embs.append(self.drop(self.encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
         prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-        to_concat = Variable(torch.cuda.FloatTensor(batch_size, self.hsize).zero_())
+        if data["cuda"]:
+            to_concat = Variable(torch.cuda.FloatTensor(batch_size, self.hsize).zero_())
+        else:
+            to_concat = Variable(torch.FloatTensor(batch_size, self.hsize).zero_())
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             for b in range(batch_size):
                 to_concat[b].data.copy_(prev_hs[conditions[b][t]][b].data)
@@ -234,11 +237,17 @@ class VineRNNModel(nn.Module):
         rnn_input = torch.cat(embs, dim=2)
         prev_hs = [hidden]
         if self.rnn_type == 'LSTM':
-            # TODO 
-            copied_hs = [Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_()),
+            if data["cuda"]:
+                copied_hs = [Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_()),
                           Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())]
+            else:
+                copied_hs = [Variable(torch.FloatTensor(batch_size, self.nhid).zero_()),
+                          Variable(torch.FloatTensor(batch_size, self.nhid).zero_())]
         else:
-            copied_hs = Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())
+            if data["cuda"]:
+                copied_hs = Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())
+            else:
+                copied_hs = Variable(torch.FloatTensor(batch_size, self.nhid).zero_())
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             for b in range(batch_size):
                 if self.rnn_type == 'LSTM':

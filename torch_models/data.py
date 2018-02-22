@@ -3,6 +3,9 @@ import os, random
 import torch
 import util
 import pickle
+import similarity
+
+MIN_WINDOW = 4
 
 class Corpus(object):
     def __init__(self):
@@ -23,12 +26,17 @@ class Corpus(object):
         for f in util.getmidfiles(path):
             for c in range(self.vocab.num_channels):
                 melody, _ = self.vocab.mid2orig(f, include_measure_boundaries, channel=c)
-                if len(melody) < 10 or len(melody) > 450:
+                if len(melody) < 10 or len(melody) > 400:
                     continue
+                melody2, _ = self.vocab.mid2orig(f, include_measure_boundaries=True, channel=c)
                 melodies[c].append(
-                    [self.vocab.orig2e[c][orig].i for orig in melody])
+                    (
+                        [self.vocab.orig2e[c][orig].i for orig in melody],
+                        max(int(similarity.get_avg_dist_between_measures(melody2, self.vocab)), MIN_WINDOW)
+                    )
+                        )
         for c in range(self.vocab.num_channels):
-            melodies[c].sort(key=lambda x: -len(x))
+            melodies[c].sort(key=lambda x: -len(x[0]))
         return melodies
 
     def save(self):

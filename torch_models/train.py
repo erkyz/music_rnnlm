@@ -115,16 +115,18 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx)) # TODO why was there a -1 here?
     source_slice = source[start_idx:start_idx+this_bsz]
-    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
-    maxlen = len(source_slice[0])
+    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel, _ in source_slice]
+    maxlen = len(source_slice[0][0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     conditions = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
-        melody = [sv.i2e[0][i].original for i in source_slice[b]][1:] # remove START
+        m = source_slice[b][0]
+        melody = [sv.i2e[0][i].original for i in m][1:] # remove START
+        args.window = source_slice[b][1]
         batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
-        data[b] = pad(torch.LongTensor(source_slice[b]), maxlen)
+        data[b] = pad(torch.LongTensor(m), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
         conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen) 
@@ -147,19 +149,21 @@ def get_batch(source, batch, bsz, sv):
     def pad(tensor, length):
         return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
     start_idx = batch * bsz
-    this_bsz = min(bsz, (len(source) - start_idx - 1))
+    this_bsz = min(bsz, (len(source) - start_idx))
     source_slice = source[start_idx:start_idx+this_bsz]
-    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel in source_slice]
-    maxlen = len(source_slice[0])
+    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel, _ in source_slice]
+    maxlen = len(source_slice[0][0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for i in range(this_bsz):
-        data[i] = pad(torch.LongTensor(source_slice[i]), maxlen) 
+        data[i] = pad(torch.LongTensor(source_slice[i][0]), maxlen) 
         t = target_slice[i] 
+        '''
         second_measure_idx = nth_item_index(
             args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
         for j in xrange(second_measure_idx):
             t[j] = PADDING
+        '''
         target[i] = pad(torch.LongTensor(t), maxlen)
     if args.cuda: 
         data = data.cuda()
@@ -286,6 +290,7 @@ def get_batch_variables(batches, batch, evaluation=False):
     for key in batch_data:
         batch_data_variables[key] = \
             [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
+    batch_data_variables["cuda"] = args.cuda 
     return batch_data_variables
 
 def evaluate(eval_data, mb_indices):
@@ -296,7 +301,6 @@ def evaluate(eval_data, mb_indices):
     hidden = model.init_hidden(args.batch_size)
     for batch in mb_indices:
         data = get_batch_variables(eval_data, batch, evaluation=True)
-
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden)
@@ -335,9 +339,6 @@ def train():
 
         total_loss += loss.data
    
-    print total_loss
-    print train_data
-
     return total_loss[0] / len(train_data["data"]) # TODO THIS IS NOT THE NUM BATCHES
 
 # Loop over epochs.

@@ -4,13 +4,19 @@ from music21 import pitch
 import numpy as np
 import matplotlib.pyplot as plt
 
-import util
+import util, similarity
 
 parser = argparse.ArgumentParser(description='Melody self-similarity')
 parser.add_argument('--data', type=str, default='music_data/CMaj_Nottingham/train/',
                     help='location of the data corpus')
 parser.add_argument('--melody', type=str, default='jigs_simple_chords_1.mid',
                     help='midi song name')
+parser.add_argument('--distance_threshold', type=int, default=0,
+                    help='distance where below, we consider windows sufficiently similar')
+parser.add_argument('--c', type=int, default=2,
+                    help='number of measures to base the note-based ED window off of')
+
+
 args = parser.parse_args()
 
 
@@ -39,19 +45,14 @@ def diff(x):
         diff = -1 if pitch.Pitch(left[0]) < pitch.Pitch(right[0]) else 1
     return (diff, right[1])
 
+MIN_WINDOW = 4
+
 pdv = util.PitchDurationVocab()
-melody, measure_limit = pdv.mid2orig(args.data + args.melody, include_measure_boundaries=False)
-melody = melody[1:-1]
-
-differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
-rawDiffs = map(lambda x: x[0], differences)
-
-window = 8
-
-ssm = np.zeros([len(differences), len(differences)])
-for i in xrange(window, len(differences)):
-    for j in xrange(window, len(differences)):
-        ssm[i,j] = edit_distance(rawDiffs[i-window+1:i+1], rawDiffs[j-window+1:j+1])
+melody, _ = pdv.mid2orig(args.data + args.melody, include_measure_boundaries=False)
+melody = melody[1:] # remove START
+melody2, _ = pdv.mid2orig(args.data + args.melody, include_measure_boundaries=True)
+args.window = max(args.c*int(similarity.get_avg_dist_between_measures(melody2, pdv)), MIN_WINDOW)
+ssm, _ = similarity.get_note_ssm(melody, args)
 
 plt.imshow(ssm, cmap='gray', interpolation='nearest')
 plt.show()
