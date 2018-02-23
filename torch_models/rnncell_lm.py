@@ -60,7 +60,7 @@ class RNNCellModel(nn.Module):
         for i, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             hidden = self.rnn(emb_t.squeeze(1), hidden)
             output += [hidden[0]] if self.rnn_type == 'LSTM' else [hidden]
-        output = torch.stack(output, 1).squeeze(0)
+        output = torch.stack(output, 1)
         output = self.drop(output)
 
         decs = []
@@ -159,7 +159,7 @@ class XRNNModel(nn.Module):
             # print hidden[0].size()
             prev_hs.append(hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:,:self.hsize])
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-        output = torch.stack(output, 1).squeeze(0)
+        output = torch.stack(output, 1)
         output = self.drop(output)
 
         decs = []
@@ -259,7 +259,7 @@ class VineRNNModel(nn.Module):
             hidden = self.rnn(emb_t.squeeze(1), new_h)
             prev_hs.append(hidden)
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-        output = torch.stack(output, 1).squeeze(0)
+        output = torch.stack(output, 1)
         output = self.drop(output)
 
         decs = []

@@ -39,7 +39,7 @@ parser.add_argument('--rnn_type', type=str, default='LSTM',
 parser.add_argument('--arch', type=str, default='base')
 parser.add_argument('--emsize', type=int, default=100,
                     help='size of word embeddings')
-parser.add_argument('--nhid', type=int, default=200,
+parser.add_argument('--nhid', type=int, default=1024,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
@@ -100,7 +100,7 @@ if torch.cuda.is_available():
 # Load data
 ###############################################################################
 
-CONDITIONALS = {'crnn', 'vine'}
+CONDITIONALS = {'xrnn', 'vine'}
 
 def nth_item_index(n, item, iterable):
     if n == -1:
@@ -179,6 +179,7 @@ def batchify(source, bsz, sv):
         channel_targets = []
         channel_conditions = []
         for batch_idx in range(int(len(source[channel])/bsz)):
+            # For each batch, create a Tensor
             if args.arch in CONDITIONALS:
                 data, conditions, target, = \
                     get_batch_with_conditions(source[channel], batch_idx, bsz, sv)
@@ -245,7 +246,7 @@ args.ntokens = sv.sizes
 args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
 if args.arch == "hrnn":
     model = hrnnlm.FactorHRNNModel(args)
-elif args.arch == "crnn":
+elif args.arch == "xrnn":
     model = rnncell_lm.XRNNModel(args) 
 elif args.arch == "cell":
     model = rnncell_lm.RNNCellModel(args) 
@@ -286,12 +287,12 @@ def get_batch_variables(batches, batch, evaluation=False):
             batch_data[key].append(value[channel][batch])
 
     # Turn data into Variable_s
-    batch_data_variables = {}
+    variable_batch_data = {}
     for key in batch_data:
-        batch_data_variables[key] = \
+        variable_batch_data[key] = \
             [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
-    batch_data_variables["cuda"] = args.cuda 
-    return batch_data_variables
+    variable_batch_data["cuda"] = args.cuda 
+    return variable_batch_data
 
 def evaluate(eval_data, mb_indices):
     # Turn on evaluation mode which disables dropout.
@@ -308,7 +309,7 @@ def evaluate(eval_data, mb_indices):
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
         hidden = repackage_hidden(hidden)
-    return total_loss[0] / len(eval_data["data"]) # num batches, TODO THIS IS WRONG 
+    return total_loss[0] / len(mb_indices)
 
 def train():
     # Turn on training mode which enables dropout.
@@ -338,8 +339,8 @@ def train():
             p.data.add_(-lr, p.grad.data)
 
         total_loss += loss.data
-   
-    return total_loss[0] / len(train_data["data"]) # TODO THIS IS NOT THE NUM BATCHES
+  
+    return total_loss[0] / len(train_mb_indices) 
 
 # Loop over epochs.
 lr = args.lr
