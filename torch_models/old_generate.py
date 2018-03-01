@@ -9,46 +9,83 @@ import data, util, similarity, beam_search
 
 parser = argparse.ArgumentParser()
 
-# Model parameters.
+# Data stuff
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
-parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv.p",
-                    help='location of the saved vocabulary')
-parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_corpus.p",
+parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
+                    help='location of the saved vocabulary, or where to save it')
+parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
                     help='location of the saved corpus, or where to save it')
 parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
 parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
+
+# Generate stuff
 parser.add_argument('--max_events', type=int, default='500',
                     help='number of words to generate')
 parser.add_argument('--num_out', type=int, default='10',
                     help='number of melodies to generate')
 parser.add_argument('--beam_size', type=int, default='3',
                     help='beam size')
-parser.add_argument('--seed', type=int, default=1111,
-                    help='random seed')
-parser.add_argument('--cuda', action='store_true',
-                    help='use CUDA')
 parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
-parser.add_argument('--log-interval', type=int, default=100,
-                    help='reporting interval')
 parser.add_argument('--condition_piece', type=str, default="",
                     help='midi piece to condition on')
 parser.add_argument('--condition_notes', type=int, default=0,
                     help='number of notes to condition the generation on')
-parser.add_argument('--window', type=int, default=8,
-                    help='window size for note-based moving edit distances')
-parser.add_argument('--distance_threshold', type=int, default=3,
-                    help='distance where below, we consider windows sufficiently similar')
+
+# RNN params
+parser.add_argument('--rnn_type', type=str, default='LSTM',
+                    help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--arch', type=str, default='base')
-parser.add_argument('--progress_tokens', action='store_true',
-                    help='whether to condition on the amount of time left until the end \
-                            of the measure')
+parser.add_argument('--emsize', type=int, default=100,
+                    help='size of word embeddings')
+parser.add_argument('--nhid', type=int, default=1024,
+                    help='number of hidden units per layer')
+parser.add_argument('--nlayers', type=int, default=1,
+                    help='number of layers')
+parser.add_argument('--lr', type=float, default=10,
+                    help='initial learning rate')
+parser.add_argument('--clip', type=float, default=0.25,
+                    help='gradient clipping')
+parser.add_argument('--epochs', type=int, default=40,
+                    help='upper epoch limit')
+parser.add_argument('--batch_size', type=int, default=32, metavar='N',
+                    help='batch size')
+parser.add_argument('--dropout', type=float, default=0.1,
+                    help='dropout applied to layers (0 = no dropout)')
+parser.add_argument('--tied', action='store_true',
+                    help='tie the word embedding and softmax weights')
 parser.add_argument('--factorize', action='store_true',
                     help='whether to factorize embeddings')
 
+# Stuff for measure splitting
+parser.add_argument('--progress_tokens', action='store_true',
+                    help='whether to condition on the amount of time left until the end \
+                            of the measure')
+parser.add_argument('--measure_tokens', action='store_true',
+                    help='whether to have a token in between measures')
+
+# Stuff for diagonal detection
+parser.add_argument('--window', type=int, default=8,
+                    help='window size for note-based moving edit distances')
+parser.add_argument('--c', type=int, default=2,
+                    help='number of measures to base the note-based ED window off of')
+parser.add_argument('--distance_threshold', type=int, default=3,
+                    help='distance where below, we consider windows sufficiently similar')
+parser.add_argument('--most_recent', action='store_true',
+                    help='whether we repeat the most recent similar or earliest similar')
+
+# Meta-training stuff
+parser.add_argument('--skip_first_n_bar_losses', type=int, default=0, metavar='N',
+                    help='"encode" first n bars')
+parser.add_argument('--seed', type=int, default=1111,
+                    help='random seed')
+parser.add_argument('--cuda', action='store_true',
+                    help='use CUDA')
+parser.add_argument('--log-interval', type=int, default=200, metavar='N',
+                    help='report interval')
 args = parser.parse_args()
 
 # Set the random seed manually for reproducibility.
@@ -78,13 +115,11 @@ def make_data_dict():
     '''
     data = {}
     data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
-    if args.arch == 'crnn':
-        data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
+    data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
     if args.cuda:
         for c in range(sv.num_channels):
             data["data"][c].data = data["data"][c].data.cuda()
-            if args.arch == 'crnn':
-                data["conditions"][c].data = data["conditions"][c].data.cuda()
+            data["conditions"][c].data = data["conditions"][c].data.cuda()
     return data
 
 
@@ -98,8 +133,7 @@ def get_events_and_conditions(sv):
     for channel in range(sv.num_channels):
         curr_note = 0
         origs, _ = sv.mid2orig(args.condition_piece, channel)
-        channel_conditions[channel] = similarity.get_min_past_distance(origs[1:], args)
-
+        channel_conditions[channel] = similarity.get_prev_match_idx(origs[1:], args, sv)
         for orig in origs:
             if orig[0] == "rest":
                 continue # TODO 
@@ -140,19 +174,22 @@ for i in range(args.num_out):
             torch.cuda.manual_seed(i) 
 
     hidden = model.init_hidden(1) 
+    prev_hs = [hidden]
     gen_data = make_data_dict()
+    gen_data["cuda"] = args.cuda
     events, conditions = get_events_and_conditions(sv)
-
     generated_events = [[] * sv.num_channels] # TODO
 
-    for t in range(args.max_events):
+    for t in range(min(args.max_events, len(conditions[0]))):
         for c in range(sv.num_channels):
+            '''
             fill_val = NO_INFO_EVENT_IDX
-            if args.arch == 'crnn' and t < len(conditions[c]):
+            if args.arch in util.CONDITIONALS and t < len(conditions[c]):
                 prev_idx = conditions[c][t]
                 if prev_idx != -1 and prev_idx < len(generated_events[c])-1:
                     fill_val = similarity.diff((generated_events[c][prev_idx].original,generated_events[c][prev_idx+1].original))[0]+1
-            gen_data["conditions"][c].data.fill_(fill_val)
+            '''
+            gen_data["conditions"][c].data.fill_(conditions[c][t])
 
         for c in range(sv.num_channels):
             if t < args.condition_notes:
@@ -162,6 +199,9 @@ for i in range(args.num_out):
 
         if args.arch == "hrnn":
             outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+        elif args.arch == 'vine':
+            # prev_hs modified in place
+            outputs, hidden = model(gen_data, hidden, prev_hs)
         else:
             outputs, hidden = model(gen_data, hidden)
 
@@ -176,7 +216,8 @@ for i in range(args.num_out):
         if t >= args.condition_notes and word_idxs[0] == sv.special_events["end"].i:
             break
 
-    print i, [x.i for x in generated_events[0]]
+    print i, zip(
+            [x.i for x in generated_events[0]], conditions[0], range(len(generated_events[0])))
     sv.events2mid([generated_events[0]], "../../generated/" + args.outf + str(i) + '.mid')
 
 '''

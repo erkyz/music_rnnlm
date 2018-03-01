@@ -76,7 +76,7 @@ parser.add_argument('--most_recent', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
 
 # Meta-training stuff
-parser.add_argument('--skip_first_n_bar_losses', type=int, default=2, metavar='N',
+parser.add_argument('--skip_first_n_note_losses', type=int, default=0,
                     help='"encode" first n bars')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
@@ -99,8 +99,6 @@ if torch.cuda.is_available():
 ###############################################################################
 # Load data
 ###############################################################################
-
-CONDITIONALS = {'xrnn', 'vine'}
 
 def nth_item_index(n, item, iterable):
     if n == -1:
@@ -130,13 +128,9 @@ def get_batch_with_conditions(source, batch, bsz, sv):
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
         conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen) 
-        t = target_slice[b]
-        '''
-        second_measure_idx = nth_item_index(
-            args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
-        for j in xrange(second_measure_idx):
+        t = target_slice[b] 
+        for j in xrange(min(args.skip_first_n_note_losses, len(t))):
             t[j] = PADDING
-        '''
         target[b] = pad(torch.LongTensor(t), maxlen)
     if args.cuda: 
         data = data.cuda()
@@ -158,12 +152,8 @@ def get_batch(source, batch, bsz, sv):
     for i in range(this_bsz):
         data[i] = pad(torch.LongTensor(source_slice[i][0]), maxlen) 
         t = target_slice[i] 
-        '''
-        second_measure_idx = nth_item_index(
-            args.skip_first_n_bar_losses - 1, sv.special_events['measure'].i, t)
-        for j in xrange(second_measure_idx):
+        for j in xrange(args.skip_first_n_note_losses):
             t[j] = PADDING
-        '''
         target[i] = pad(torch.LongTensor(t), maxlen)
     if args.cuda: 
         data = data.cuda()
@@ -172,7 +162,7 @@ def get_batch(source, batch, bsz, sv):
 
 def batchify(source, bsz, sv):
     batch_data = {"data": [], "targets": []}
-    if args.arch in CONDITIONALS:
+    if args.arch in util.CONDITIONALS:
         batch_data["conditions"] = []
     for channel in range(len(source)):
         channel_batches = []
@@ -180,7 +170,7 @@ def batchify(source, bsz, sv):
         channel_conditions = []
         for batch_idx in range(int(len(source[channel])/bsz)):
             # For each batch, create a Tensor
-            if args.arch in CONDITIONALS:
+            if args.arch in util.CONDITIONALS:
                 data, conditions, target, = \
                     get_batch_with_conditions(source[channel], batch_idx, bsz, sv)
                 channel_conditions.append(conditions)
@@ -190,7 +180,7 @@ def batchify(source, bsz, sv):
             channel_targets.append(target)
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
-        if args.arch in CONDITIONALS:
+        if args.arch in util.CONDITIONALS:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
    
@@ -219,7 +209,7 @@ print "Time elapsed", time.time() - t
 f = '../tmp/train_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) 
 if args.most_recent:
     f += '_recent_first'
-if args.arch in CONDITIONALS:
+if args.arch in util.CONDITIONALS:
     f += '_condmod'
 f += '.p'
 if os.path.isfile(f):
@@ -330,7 +320,6 @@ def train():
         outputs, hidden = model(data, hidden)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
-        # loss should be a matrix, I believe.
         loss.backward()
 
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.

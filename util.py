@@ -7,6 +7,7 @@ from collections import defaultdict
 
 import events
 
+CONDITIONALS = {'xrnn', 'vine'}
 PADDING_NAME = 'padding'
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'
@@ -205,7 +206,10 @@ class PitchDurationVocab(SimpleVocab):
                 break
             if e in self.special_events.values():
                 continue
-            n = music21.note.Note(e.original[0])
+            if e.original[0] == 'rest':
+                n = music21.note.Rest()
+            else:
+                n = music21.note.Note(e.original[0])
             n.quarterLength = e.original[1]
             s.append(n)
         mf = music21.midi.translate.streamToMidiFile(s)

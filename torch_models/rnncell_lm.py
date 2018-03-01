@@ -105,7 +105,7 @@ class XRNNModel(nn.Module):
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(args.emsize, self.total_nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+            self.rnn = nn.RNN(args.emsize, self.total_nhid, nlayers, nonlinearity=nonlinearity)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(self.total_nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
@@ -156,7 +156,6 @@ class XRNNModel(nn.Module):
             else:
                 hidden = self.rnn(emb_t.squeeze(1), new_h_t)
             # For now, we're going to save all the prev_hs. if this is slow, we won't.
-            # print hidden[0].size()
             prev_hs.append(hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:,:self.hsize])
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
         output = torch.stack(output, 1)
@@ -202,7 +201,7 @@ class VineRNNModel(nn.Module):
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(args.emsize, self.nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+            self.rnn = nn.RNN(args.emsize, self.nhid, nlayers, nonlinearity=nonlinearity)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
@@ -220,7 +219,7 @@ class VineRNNModel(nn.Module):
             self.decoders[i].bias.data.fill_(0)
             self.decoders[i].weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, data, hidden):
+    def forward(self, data, hidden, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
@@ -235,7 +234,8 @@ class VineRNNModel(nn.Module):
         for c in range(self.num_channels):
             embs.append(self.drop(self.encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
-        prev_hs = [hidden]
+        if prev_hs is None:
+            prev_hs = [hidden]
         if self.rnn_type == 'LSTM':
             if data["cuda"]:
                 copied_hs = [Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_()),
