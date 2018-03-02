@@ -3,6 +3,7 @@ from __future__ import division
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
+import numpy as np
 
 import sys, os
 import argparse, pickle

@@ -123,7 +123,7 @@ class XRNNModel(nn.Module):
             self.decoders[i].bias.data.fill_(0)
             self.decoders[i].weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, data, hidden):
+    def forward(self, data, hidden, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
@@ -138,14 +138,17 @@ class XRNNModel(nn.Module):
         for c in range(self.num_channels):
             embs.append(self.drop(self.encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
-        prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+        if prev_hs is None:
+            # Generate mode
+            prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
         if data["cuda"]:
             to_concat = Variable(torch.cuda.FloatTensor(batch_size, self.hsize).zero_())
         else:
             to_concat = Variable(torch.FloatTensor(batch_size, self.hsize).zero_())
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             for b in range(batch_size):
-                to_concat[b].data.copy_(prev_hs[conditions[b][t]][b].data)
+                prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
+                to_concat[b].data.copy_(prev_hs[prev_idx][b].data)
             # The trick here is that if we don't want to concat with a previous
             # state, conditions[i] == -1.
             new_h_t = torch.cat(

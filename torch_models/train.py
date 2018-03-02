@@ -7,6 +7,7 @@ from itertools import compress, count, imap, islice
 from functools import partial
 from operator import eq
 from torch.autograd import Variable
+import torch.nn.functional as F
 import sys, os
 import pickle
 import numpy as np
@@ -47,7 +48,7 @@ parser.add_argument('--lr', type=float, default=10,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=40,
+parser.add_argument('--epochs', type=int, default=100,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                     help='batch size')
@@ -68,7 +69,7 @@ parser.add_argument('--measure_tokens', action='store_true',
 # Stuff for diagonal detection
 parser.add_argument('--window', type=int, default=8,
                     help='window size for note-based moving edit distances')
-parser.add_argument('--c', type=int, default=2,
+parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
@@ -123,6 +124,7 @@ def get_batch_with_conditions(source, batch, bsz, sv):
         m = source_slice[b][0]
         melody = [sv.i2e[0][i].original for i in m][1:] # remove START
         args.window = source_slice[b][1]
+        print args.window
         batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
         data[b] = pad(torch.LongTensor(m), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
@@ -202,7 +204,7 @@ else:
     corpusf = args.corpusf + '.p'
     sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
 
-corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args.measure_tokens)
+corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args)
 print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
@@ -250,6 +252,7 @@ if args.cuda:
     model.cuda()
 
 criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
+optimizer = torch.optim.Adam(model.parameters())
 
 ###############################################################################
 # Training code
@@ -301,7 +304,7 @@ def evaluate(eval_data, mb_indices):
         hidden = repackage_hidden(hidden)
     return total_loss[0] / len(mb_indices)
 
-def train():
+def train(x):
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0
@@ -314,18 +317,21 @@ def train():
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
-        model.zero_grad()
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
+        optimizer.zero_grad()
         loss.backward()
-
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
+        optimizer.step()
+
+        '''
         for p in model.parameters():
             p.data.add_(-lr, p.grad.data)
+        '''
 
         total_loss += loss.data
   
@@ -339,7 +345,8 @@ best_val_loss = None
 try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
-        train_loss = train()
+        x = epoch == 100
+        train_loss = train(x) # TODO
         val_loss = evaluate(valid_data, valid_mb_indices)
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
@@ -358,8 +365,13 @@ except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
 
+# TODO 
+with open(args.save, 'wb') as f:
+    torch.save(model, f)
+
 # Load the best saved model.
 with open(args.save, 'rb') as f:
+    print("Saving model")
     model = torch.load(f)
 
 # Run on test data.

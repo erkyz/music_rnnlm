@@ -36,8 +36,6 @@ parser.add_argument('--condition_notes', type=int, default=0,
                     help='number of notes to condition the generation on')
 
 # RNN params
-parser.add_argument('--rnn_type', type=str, default='LSTM',
-                    help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--arch', type=str, default='base')
 parser.add_argument('--emsize', type=int, default=100,
                     help='size of word embeddings')
@@ -70,7 +68,7 @@ parser.add_argument('--measure_tokens', action='store_true',
 # Stuff for diagonal detection
 parser.add_argument('--window', type=int, default=8,
                     help='window size for note-based moving edit distances')
-parser.add_argument('--c', type=int, default=2,
+parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
@@ -78,8 +76,6 @@ parser.add_argument('--most_recent', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
 
 # Meta-training stuff
-parser.add_argument('--skip_first_n_bar_losses', type=int, default=0, metavar='N',
-                    help='"encode" first n bars')
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
@@ -87,6 +83,7 @@ parser.add_argument('--cuda', action='store_true',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 args = parser.parse_args()
+print args
 
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
@@ -101,6 +98,7 @@ if args.temperature < 1e-3:
 
 with open(args.checkpoint, 'rb') as f:
     model = torch.load(f)
+print model
 model.eval()
 
 if args.cuda:
@@ -132,21 +130,25 @@ def get_events_and_conditions(sv):
 
     for channel in range(sv.num_channels):
         curr_note = 0
-        origs, _ = sv.mid2orig(args.condition_piece, channel)
+        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens)
+        melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True)
+        args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
+        print "window", args.window
         channel_conditions[channel] = similarity.get_prev_match_idx(origs[1:], args, sv)
         for orig in origs:
             if orig[0] == "rest":
-                continue # TODO 
-            event = sv.orig2e[channel][orig]
+                event = sv.orig2e[channel][("rest", orig[1])]
+            else:
+                event = sv.orig2e[channel][orig]
             channel_events[channel].append(event)
             curr_note += 1
-            if curr_note == args.condition_notes:
-                break
     channel_event_idxs = [[e.i for e in channel_events[c]] for c in range(sv.num_channels)]
     conditions = [channel_conditions[c] for c in range(sv.num_channels)]
     return channel_event_idxs, conditions
 
-
+if args.measure_tokens:
+    args.vocabf += '_mt'
+    args.corpusf += '_mt'
 if args.factorize:
     if args.progress_tokens:
         vocabf = args.vocabf + '_factorized_measuretokens.p'
@@ -199,16 +201,16 @@ for i in range(args.num_out):
 
         if args.arch == "hrnn":
             outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-        elif args.arch == 'vine':
+        elif args.arch == 'vine' or args.arch == 'xrnn':
             # prev_hs modified in place
             outputs, hidden = model(gen_data, hidden, prev_hs)
         else:
             outputs, hidden = model(gen_data, hidden)
 
         word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
-        word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
+        word_idxs = [torch.multinomial(word_weights[c])[0].data[0] for c in range(sv.num_channels)] 
         for c in range(sv.num_channels):
-            if t < args.condition_notes:
+            if t < args.condition_notes+1:
                 generated_events[c].append(sv.i2e[c][events[c][t]])
             else:
                 generated_events[c].append(sv.i2e[c][word_idxs[c]])

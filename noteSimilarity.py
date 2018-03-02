@@ -9,12 +9,13 @@ import util, similarity
 parser = argparse.ArgumentParser(description='Melody self-similarity')
 parser.add_argument('--data', type=str, default='music_data/CMaj_Nottingham/train/',
                     help='location of the data corpus')
-parser.add_argument('--melody', type=str, default='jigs_simple_chords_1.mid',
+parser.add_argument('--melody', type=str, default='jigs_simple_chords_1',
                     help='midi song name')
 parser.add_argument('--distance_threshold', type=int, default=0,
                     help='distance where below, we consider windows sufficiently similar')
 parser.add_argument('--c', type=int, default=2,
                     help='number of measures to base the note-based ED window off of')
+parser.add_argument('--bnw', action='store_true')
 
 
 args = parser.parse_args()
@@ -45,14 +46,15 @@ def diff(x):
         diff = -1 if pitch.Pitch(left[0]) < pitch.Pitch(right[0]) else 1
     return (diff, right[1])
 
-MIN_WINDOW = 4
 
 pdv = util.PitchDurationVocab()
-melody, _ = pdv.mid2orig(args.data + args.melody, include_measure_boundaries=False)
+melody, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=False)
 melody = melody[1:] # remove START
-melody2, _ = pdv.mid2orig(args.data + args.melody, include_measure_boundaries=True)
-args.window = max(args.c*int(similarity.get_avg_dist_between_measures(melody2, pdv)), MIN_WINDOW)
-ssm, _ = similarity.get_note_ssm(melody, args)
+melody2, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=True)
+melody2 = melody2[1:]
+args.window = max(args.c*int(similarity.get_avg_dist_between_measures(melody2, pdv)), similarity.MIN_WINDOW)
+print args.window
+ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=args.bnw)
 
 plt.imshow(ssm, cmap='gray', interpolation='nearest')
 plt.show()

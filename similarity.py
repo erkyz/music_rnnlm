@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 
 import util
 
+
+# min window if we use "c"
+MIN_WINDOW = 4
+
 def call_counter(func):
     def helper(*args, **kwargs):
         helper.calls += 1
@@ -151,7 +155,8 @@ def get_note_sdm(melody, window):
 
     return sdm, rawDiffs
 
-def get_note_ssm(melody, args):
+
+def get_note_ssm_past(melody, args, bnw=False):
     """ self-distance matrix """
     ''' melody is a PDV melody '''
     differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
@@ -160,15 +165,31 @@ def get_note_ssm(melody, args):
     ssm = np.zeros([len(differences), len(differences)]) 
     for i in xrange(args.window-1, len(differences)):
         for j in xrange(i, len(differences)):
-            # TODO this is maybe temporary, just do 1's and 0's
-            ssm[i,j] = ssm[j,i] = 1 if edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold else 0
+            if bnw:
+                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold
+            else:
+                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) 
 
     return ssm, rawDiffs
 
-MIN_WINDOW = 6
+def get_note_ssm_future(melody, args, bnw=False):
+    """ self-distance matrix """
+    ''' melody is a PDV melody '''
+    differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
+    rawDiffs = map(lambda x: x[0], differences)
+
+    ssm = np.zeros([len(differences), len(differences)]) 
+    for i in xrange(0, len(differences)-args.window):
+        for j in xrange(i, len(differences)-args.window):
+            if bnw:
+                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1]) <= args.distance_threshold
+            else:
+                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1])
+
+    return ssm, rawDiffs
 
 def get_prev_match_idx(melody, args, sv):
-    ssm, _ = get_note_ssm(melody, args)
+    ssm, _ = get_note_ssm_future(melody, args, bnw=True)
     prev_idxs = []
     # scan left to right. simplified for now to only 0's and 1's, so simpler here too.
     for col in range(ssm.shape[0]-1):
