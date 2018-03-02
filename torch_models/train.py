@@ -185,7 +185,9 @@ def batchify(source, bsz, sv):
         if args.arch in util.CONDITIONALS:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
-   
+  
+# Begin actual running
+
 t = time.time()
 if args.measure_tokens:
     args.vocabf += '_mt'

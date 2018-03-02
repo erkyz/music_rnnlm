@@ -13,7 +13,7 @@ parser.add_argument('--melody', type=str, default='jigs_simple_chords_1',
                     help='midi song name')
 parser.add_argument('--distance_threshold', type=int, default=0,
                     help='distance where below, we consider windows sufficiently similar')
-parser.add_argument('--c', type=int, default=2,
+parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--bnw', action='store_true')
 
@@ -52,7 +52,7 @@ melody, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_bound
 melody = melody[1:] # remove START
 melody2, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=True)
 melody2 = melody2[1:]
-args.window = max(args.c*int(similarity.get_avg_dist_between_measures(melody2, pdv)), similarity.MIN_WINDOW)
+args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, pdv)), similarity.MIN_WINDOW)
 print args.window
 ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=args.bnw)
 
