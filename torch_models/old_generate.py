@@ -202,7 +202,7 @@ for i in range(args.num_out):
 
     print i, zip(
             [x.i for x in generated_events[0]], conditions[0], range(len(generated_events[0])))
-    sv.events2mid([generated_events[0]], "../../generated/" + args.outf + str(i) + '.mid')
+    sv.events2mid([generated_events[0]], "../../generated/" + args.outf + '_' + str(i) + '.mid')
 
 '''
 allHyp, allScores = [], []
