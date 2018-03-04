@@ -25,6 +25,7 @@ class Corpus(object):
             for c in range(self.vocab.num_channels):
                 melody, _ = self.vocab.mid2orig(f, include_measure_boundaries=args.measure_tokens, channel=c)
                 if len(melody) < 10 or len(melody) > 400:
+                    print "Skipping", f
                     continue
                 melody2, _ = self.vocab.mid2orig(f, include_measure_boundaries=True, channel=c)
                 melody2 = melody2[1:]

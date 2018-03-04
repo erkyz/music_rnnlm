@@ -40,6 +40,34 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 
 #### File utils
 
+def get_datadumpf(args):
+    f = args.tmp_prefix + '_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) + 'bsz' + str(args.batch_size) 
+    if args.most_recent:
+        f += '_mostrecent'
+    if args.arch in CONDITIONALS:
+        f += '_condmod'
+    f += '.p'
+    return f
+
+def load_train_vocab(args):
+    if args.measure_tokens:
+        args.tmp_prefix += '_mt'
+    if args.factorize:
+        if args.progress_tokens:
+            vocabf = args.tmp_prefix + '_sv_factorized_measuretokens.p'
+            corpusf = args.tmp_prefix + '_corpus_factorized_measuretokens.p'
+            sv = FactorPDMVocab.load_from_corpus(args.data, vocabf)
+        else:
+            vocabf = args.tmp_prefix + '_sv_factorized.p'
+            corpusf = args.tmp_prefix + '_corpus_factorized.p'
+            sv = FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
+    else:
+        vocabf = args.tmp_prefix + '_sv.p'
+        corpusf = args.tmp_prefix + '_corpus.p'
+        sv = PitchDurationVocab.load_from_corpus(args.data, vocabf)
+
+    return sv, vocabf, corpusf
+
 def itersubclasses(cls, _seen=None):
     if not isinstance(cls, type):
         raise TypeError('itersubclasses must be called with '

@@ -27,10 +27,8 @@ parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Mod
 # Data stuff
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
-parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
-                    help='location of the saved vocabulary, or where to save it')
-parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
-                    help='location of the saved corpus, or where to save it')
+parser.add_argument('--tmp_prefix', type=str, default="../tmp/cmaj_nott",
+                    help='tmp directory + prefix for tmp files')
 parser.add_argument('--save', type=str,  default='../tmp/model.pt',
                     help='path to save the final model')
 
@@ -44,7 +42,7 @@ parser.add_argument('--nhid', type=int, default=1024,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=10,
+parser.add_argument('--lr', type=float, default=0.0001,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -189,33 +187,12 @@ def batchify(source, bsz, sv):
 # Begin actual running
 
 t = time.time()
-if args.measure_tokens:
-    args.vocabf += '_mt'
-    args.corpusf += '_mt'
-if args.factorize:
-    if args.progress_tokens:
-        vocabf = args.vocabf + '_factorized_measuretokens.p'
-        corpusf = args.corpusf + '_factorized_measuretokens.p'
-        sv = util.FactorPDMVocab.load_from_corpus(args.data, vocabf)
-    else:
-        vocabf = args.vocabf + '_factorized.p'
-        corpusf = args.corpusf + '_factorized.p'
-        sv = util.FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
-else:
-    vocabf = args.vocabf + '.p'
-    corpusf = args.corpusf + '.p'
-    sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
-
+sv, vocabf, corpusf = util.load_train_vocab(args)
 corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args)
 print "Time elapsed", time.time() - t
 
 ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = '../tmp/train_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) 
-if args.most_recent:
-    f += '_recent_first'
-if args.arch in util.CONDITIONALS:
-    f += '_condmod'
-f += '.p'
+f = util.get_datadumpf(args)
 if os.path.isfile(f):
     print "Load existing train data", f
     train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
@@ -254,7 +231,7 @@ if args.cuda:
     model.cuda()
 
 criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 ###############################################################################
 # Training code

@@ -12,17 +12,15 @@ parser = argparse.ArgumentParser()
 # Data stuff
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
-parser.add_argument('--vocabf', type=str, default="../tmp/cmaj_nott_sv",
-                    help='location of the saved vocabulary, or where to save it')
-parser.add_argument('--corpusf', type=str, default="../tmp/cmaj_nott_sv_corpus",
-                    help='location of the saved corpus, or where to save it')
+parser.add_argument('--tmp_prefix', type=str, default="../tmp/cmaj_nott",
+                    help='tmp directory + prefix for tmp files')
 parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
 parser.add_argument('--outf', type=str, default='test.mid',
                     help='output file for generated text')
 
 # Generate stuff
-parser.add_argument('--max_events', type=int, default='500',
+parser.add_argument('--max_events', type=int, default='250',
                     help='number of words to generate')
 parser.add_argument('--num_out', type=int, default='10',
                     help='number of melodies to generate')
@@ -146,23 +144,7 @@ def get_events_and_conditions(sv):
     conditions = [channel_conditions[c] for c in range(sv.num_channels)]
     return channel_event_idxs, conditions
 
-if args.measure_tokens:
-    args.vocabf += '_mt'
-    args.corpusf += '_mt'
-if args.factorize:
-    if args.progress_tokens:
-        vocabf = args.vocabf + '_factorized_measuretokens.p'
-        corpusf = args.corpusf + '_factorized_measuretokens.p'
-        print vocabf
-        sv = util.FactorPDMVocab.load_from_corpus(args.data, vocabf)
-    else:
-        vocabf = args.vocabf + '_factorized.p'
-        corpusf = args.corpusf + '_factorized.p'
-        sv = util.FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
-else:
-    vocabf = args.vocabf + '.p'
-    corpusf = args.corpusf + '.p'
-    sv = util.PitchDurationVocab.load_from_corpus(args.data, vocabf)
+sv, _, _ = util.load_train_vocab(args)
 
 NO_INFO_EVENT_IDX = 3
 
