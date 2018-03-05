@@ -107,46 +107,16 @@ if args.cuda:
 else:
     model.cpu()
 
-def make_data_dict():
-    ''' 
-    Returns a tuple. 
-    Both outputs are lists of lists, one sublist for each channel
-    '''
-    data = {}
-    data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
-    if args.arch == 'crnn':
-        data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
-    if args.cuda:
-        for c in range(sv.num_channels):
-            data["data"][c].data = data["data"][c].data.cuda()
-            if args.arch == 'crnn':
-                data["conditions"][c].data = data["conditions"][c].data.cuda()
-    return data
-
-
-def get_hid_sim(hiddens):
-    sims = np.zeros([len(hiddens), len(hiddens)])
-    for i in range(len(hiddens)):
-        for j in range(i, len(hiddens)):
-            l = hiddens[0][i] if args.arch == 'LSTM' else hiddens[i]
-            r = hiddens[0][j] if args.arch == 'LSTM' else hiddens[j]
-            # cosine similarity
-            sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r))).data[0][0]
-    return sims
-
 sv, _, _ = util.load_train_vocab(args)
 
-NO_INFO_EVENT_IDX = 3
-
 hidden = model.init_hidden(1) 
-gen_data = make_data_dict()
+gen_data = make_data_dict(args, sv)
 events, conditions = gen_util.get_events_and_conditions(sv, args)
 
 hiddens = []
 
 for t in range(len(events[0])):
     for c in range(sv.num_channels):
-        fill_val = NO_INFO_EVENT_IDX
         '''
         if args.arch == 'crnn' and t < len(conditions[c]):
             prev_idx = conditions[c][t]
@@ -167,7 +137,7 @@ for t in range(len(events[0])):
 
 
 print len(hiddens)
-sims = get_hid_sim(hiddens)
+sims = similarity.get_hid_sim(hiddens)
 print sims
 pickle.dump(hiddens, open("../tmp/test1.p", 'wb'))
 pickle.dump(sims, open("../tmp/test2.p", 'wb'))

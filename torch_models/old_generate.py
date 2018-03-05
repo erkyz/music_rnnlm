@@ -104,19 +104,6 @@ if args.cuda:
 else:
     model.cpu()
 
-def make_data_dict():
-    ''' 
-    Returns a tuple. 
-    Both outputs are lists of lists, one sublist for each channel
-    '''
-    data = {}
-    data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
-    data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
-    if args.cuda:
-        for c in range(sv.num_channels):
-            data["data"][c].data = data["data"][c].data.cuda()
-            data["conditions"][c].data = data["conditions"][c].data.cuda()
-    return data
 
 sv, _, _ = util.load_train_vocab(args)
 
@@ -133,7 +120,7 @@ for i in range(args.num_out):
 
     hidden = model.init_hidden(1) 
     prev_hs = [hidden]
-    gen_data = make_data_dict()
+    gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
     events, conditions = gen_util.get_events_and_conditions(sv, args)
     generated_events = [[] * sv.num_channels] # TODO

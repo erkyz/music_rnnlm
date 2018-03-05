@@ -1,7 +1,16 @@
+import torch
+from torch.autograd import Variable
+import os, sys
 
-import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import similarity
+import similarity, util
+
+def get_events(sv, args, mel_idxs):
+    channel_event_idxs = [[] for _ in range(sv.num_channels)]
+    for channel in range(sv.num_channels):
+        for idx in mel_idxs[channel]:
+            channel_event_idxs[channel].append(idx)
+    return channel_event_idxs
 
 def get_events_and_conditions(sv, args):
     if args.condition_piece == "":
@@ -26,4 +35,19 @@ def get_events_and_conditions(sv, args):
     conditions = [channel_conditions[c] for c in range(sv.num_channels)]
     return channel_event_idxs, conditions
 
+def make_data_dict(args, sv):
+    ''' 
+    Returns a tuple. 
+    Both outputs are lists of lists, one sublist for each channel
+    '''
+    data = {}
+    data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
+    if args.arch in util.CONDITIONALS:
+        data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
+    if args.cuda:
+        for c in range(sv.num_channels):
+            data["data"][c].data = data["data"][c].data.cuda()
+            if args.arch in util.CONDITIONALS:
+                data["conditions"][c].data = data["conditions"][c].data.cuda()
+    return data
 

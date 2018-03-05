@@ -25,7 +25,6 @@ class RNNCellModel(nn.Module):
 
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
-        self.num_conditions = args.num_conditions
         for i in range(self.num_channels):
             self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
         if args.rnn_type in ['LSTM', 'GRU']:

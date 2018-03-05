@@ -14,10 +14,10 @@ import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import rnnlm, rnncell_lm, hrnnlm
-import data
-import similarity
 import util
+import data
+import rnnlm, rnncell_lm, hrnnlm
+import similarity
 
 # event index for padding
 PADDING = 0
@@ -65,14 +65,15 @@ parser.add_argument('--measure_tokens', action='store_true',
                     help='whether to have a token in between measures')
 
 # Stuff for diagonal detection
-parser.add_argument('--window', type=int, default=8,
-                    help='window size for note-based moving edit distances')
+parser.add_argument('--vanilla_ckpt', type=str,  default='',
+                    help='pretrained vanilla model dir')
 parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
 parser.add_argument('--most_recent', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
+
 
 # Meta-training stuff
 parser.add_argument('--skip_first_n_note_losses', type=int, default=0,
@@ -96,16 +97,18 @@ if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
 ###############################################################################
-# Load data
+# Helper functions
 ###############################################################################
 
-def nth_item_index(n, item, iterable):
-    if n == -1:
-        return 0
-    indices = compress(count(), imap(partial(eq, item), iterable))
-    return next(islice(indices, n, None), -1)
+def repackage_hidden(h):
+    """Wraps hidden states in new Variables, to detach them from their history."""
+    if type(h) == Variable:
+        return Variable(h.data)
+    else:
+        return tuple(repackage_hidden(v) for v in h)
+    return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
-def get_batch_with_conditions(source, batch, bsz, sv):
+def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     """ Returns two Tensors corresponding to the batch """
     def pad(tensor, length):
         return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
@@ -119,12 +122,17 @@ def get_batch_with_conditions(source, batch, bsz, sv):
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
-        m = source_slice[b][0]
-        melody = [sv.i2e[0][i].original for i in m][1:] # remove START
-        args.window = source_slice[b][1]
-        print args.window
-        batch_conditions = similarity.get_prev_match_idx(melody, args, sv)
-        data[b] = pad(torch.LongTensor(m), maxlen)
+        mel_idxs = source_slice[b][0]
+        if args.vanilla_ckpt == '':
+            melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
+            args.window = source_slice[b][1]
+            ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=True)
+        else:
+            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, mel_idxs)
+        batch_conditions = similarity.get_prev_match_idx(ssm, args, sv)
+        # print zip(mel_idxs, range(len(mel_idxs)))
+        # print zip(batch_conditions, range(len(batch_conditions)))
+        data[b] = pad(torch.LongTensor(mel_idxs), maxlen)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
         conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen) 
@@ -160,7 +168,7 @@ def get_batch(source, batch, bsz, sv):
         target = target.cuda()
     return data, target.view(-1)
 
-def batchify(source, bsz, sv):
+def batchify(source, bsz, sv, vanilla_model):
     batch_data = {"data": [], "targets": []}
     if args.arch in util.CONDITIONALS:
         batch_data["conditions"] = []
@@ -172,7 +180,7 @@ def batchify(source, bsz, sv):
             # For each batch, create a Tensor
             if args.arch in util.CONDITIONALS:
                 data, conditions, target, = \
-                    get_batch_with_conditions(source[channel], batch_idx, bsz, sv)
+                    get_batch_with_conditions(source[channel], batch_idx, bsz, sv, vanilla_model)
                 channel_conditions.append(conditions)
             else:
                 data, target = get_batch(source[channel], batch_idx, bsz, sv) 
@@ -183,71 +191,9 @@ def batchify(source, bsz, sv):
         if args.arch in util.CONDITIONALS:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
-  
-# Begin actual running
-
-t = time.time()
-sv, vocabf, corpusf = util.load_train_vocab(args)
-corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args)
-print "Time elapsed", time.time() - t
-
-''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = util.get_datadumpf(args)
-if os.path.isfile(f):
-    print "Load existing train data", f
-    train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
-else:
-    print "Begin batchify"
-    t = time.time()
-    train_data = batchify(corpus.trains, args.batch_size, sv)
-    valid_data = batchify(corpus.valids, args.batch_size, sv)
-    test_data = batchify(corpus.tests, args.batch_size, sv)
-    print "Saving train data to", f, "time elapsed", time.time() - t
-    pickle.dump((train_data, valid_data, test_data), open(f, 'wb'))
-
-train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
-valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
-test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
-
-###############################################################################
-# Build the model
-###############################################################################
-
-args.ntokens = sv.sizes
-args.num_conditions = 4 # TODO is there a better way to do this? (hint: yes)
-if args.arch == "hrnn":
-    model = hrnnlm.FactorHRNNModel(args)
-elif args.arch == "xrnn":
-    model = rnncell_lm.XRNNModel(args) 
-elif args.arch == "cell":
-    model = rnncell_lm.RNNCellModel(args) 
-elif args.arch == "vine":
-    model = rnncell_lm.VineRNNModel(args) 
-else:
-    model = rnnlm.RNNModel(args)
-print model
-
-if args.cuda:
-    model.cuda()
-
-criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-###############################################################################
-# Training code
-###############################################################################
-
-
-def repackage_hidden(h):
-    """Wraps hidden states in new Variables, to detach them from their history."""
-    if type(h) == Variable:
-        return Variable(h.data)
-    else:
-        return tuple(repackage_hidden(v) for v in h)
-
-    return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
 def get_batch_variables(batches, batch, evaluation=False):
+    # Used because you can't save Variables with pickle
     ''' Size of |batches|: num_channels * num_batches * num_examples_in_batch_i '''
     batch_data = {}
     # batches is a dict
@@ -265,6 +211,65 @@ def get_batch_variables(batches, batch, evaluation=False):
             [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
     variable_batch_data["cuda"] = args.cuda 
     return variable_batch_data
+
+
+###############################################################################
+# Build the model
+###############################################################################
+
+t = time.time()
+sv, vocabf, corpusf = util.load_train_vocab(args)
+corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args)
+print "Time elapsed", time.time() - t
+
+args.ntokens = sv.sizes
+vanilla_model = None
+if args.arch == "hrnn":
+    model = hrnnlm.FactorHRNNModel(args)
+elif args.arch == "xrnn":
+    if args.vanilla_ckpt != '':
+        with open(args.vanilla_ckpt, 'rb') as f:
+            vanilla_model = torch.load(f)
+    model = rnncell_lm.XRNNModel(args) 
+elif args.arch == "cell":
+    model = rnncell_lm.RNNCellModel(args) 
+elif args.arch == "vine":
+    model = rnncell_lm.VineRNNModel(args) 
+else:
+    model = rnnlm.RNNModel(args)
+print model
+
+if args.cuda:
+    model.cuda()
+
+criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+###############################################################################
+# Get the data
+###############################################################################
+
+''' Size: num_channels * num_batches * num_examples_in_batch_i '''
+f = util.get_datadumpf(args)
+if os.path.isfile(f):
+    print "Load existing train data", f
+    train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
+else:
+    print "Begin batchify"
+    t = time.time()
+    train_data = batchify(corpus.trains, args.batch_size, sv, vanilla_model)
+    valid_data = batchify(corpus.valids, args.batch_size, sv, vanilla_model)
+    test_data = batchify(corpus.tests, args.batch_size, sv, vanilla_model)
+    print "Saving train data to", f, "time elapsed", time.time() - t
+    pickle.dump((train_data, valid_data, test_data), open(f, 'wb'))
+
+train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
+valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
+test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
+
+###############################################################################
+# Training code
+###############################################################################
 
 def evaluate(eval_data, mb_indices):
     # Turn on evaluation mode which disables dropout.
@@ -344,10 +349,8 @@ except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
 
-'''
 with open(args.save, 'wb') as f:
     torch.save(model, f)
-'''
 
 # Load the best saved model.
 with open(args.save, 'rb') as f:
