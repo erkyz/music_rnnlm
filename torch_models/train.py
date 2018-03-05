@@ -293,8 +293,6 @@ def train(x):
     random.shuffle(train_mb_indices)
     for batch in train_mb_indices:
         data = get_batch_variables(train_data, batch)
-        print data
-        assert(False)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)

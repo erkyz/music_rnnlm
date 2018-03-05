@@ -4,11 +4,12 @@ import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
 
 import sys, os
 import argparse, pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import data, util, similarity, beam_search
+import data, util, similarity, beam_search, gen_util
 
 parser = argparse.ArgumentParser()
 
@@ -33,8 +34,6 @@ parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--condition_piece', type=str, default="",
                     help='midi piece to condition on')
-parser.add_argument('--condition_notes', type=int, default=0,
-                    help='number of notes to condition the generation on')
 
 # RNN params
 parser.add_argument('--arch', type=str, default='base')
@@ -125,31 +124,6 @@ def make_data_dict():
     return data
 
 
-def get_events_and_conditions(sv):
-    if args.condition_piece == "":
-        return [], []
-
-    channel_events = [[] for _ in range(sv.num_channels)]
-    channel_conditions = [[] for _ in range(sv.num_channels)]
-
-    for channel in range(sv.num_channels):
-        curr_note = 0
-        origs, _ = sv.mid2orig(args.condition_piece, channel)
-        channel_conditions[channel] = similarity.get_min_past_distance(origs[1:], args)
-
-        for orig in origs:
-            if orig[0] == "rest":
-                continue # TODO 
-            event = sv.orig2e[channel][orig]
-            channel_events[channel].append(event)
-            curr_note += 1
-            if curr_note == args.condition_notes:
-                break
-    channel_event_idxs = [[e.i for e in channel_events[c]] for c in range(sv.num_channels)]
-    conditions = [channel_conditions[c] for c in range(sv.num_channels)]
-    return channel_event_idxs, conditions
-
-
 def get_hid_sim(hiddens):
     sims = np.zeros([len(hiddens), len(hiddens)])
     for i in range(len(hiddens)):
@@ -157,7 +131,8 @@ def get_hid_sim(hiddens):
             l = hiddens[0][i] if args.arch == 'LSTM' else hiddens[i]
             r = hiddens[0][j] if args.arch == 'LSTM' else hiddens[j]
             # cosine similarity
-            sims[i,j] = sims[j,i] = torch.dot(l,r) / (torch.norm(l) * torch.norm(r))
+            sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r))).data[0][0]
+    return sims
 
 sv, _, _ = util.load_train_vocab(args)
 
@@ -165,7 +140,7 @@ NO_INFO_EVENT_IDX = 3
 
 hidden = model.init_hidden(1) 
 gen_data = make_data_dict()
-events, conditions = get_events_and_conditions(sv)
+events, conditions = gen_util.get_events_and_conditions(sv, args)
 
 hiddens = []
 
@@ -190,10 +165,13 @@ for t in range(len(events[0])):
         outputs, hidden = model(gen_data, hidden)
     hiddens.append(hidden)
 
-print hiddens
+
+print len(hiddens)
 sims = get_hid_sim(hiddens)
 print sims
 pickle.dump(hiddens, open("../tmp/test1.p", 'wb'))
 pickle.dump(sims, open("../tmp/test2.p", 'wb'))
 
+plt.imshow(sims, cmap='gray', interpolation='nearest')
+plt.savefig('test.png')
 

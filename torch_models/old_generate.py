@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import sys, os
 import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import data, util, similarity, beam_search
+import data, util, similarity, beam_search, gen_util
 
 parser = argparse.ArgumentParser()
 
@@ -118,32 +118,6 @@ def make_data_dict():
             data["conditions"][c].data = data["conditions"][c].data.cuda()
     return data
 
-
-def get_events_and_conditions(sv):
-    if args.condition_piece == "":
-        return [], []
-
-    channel_events = [[] for _ in range(sv.num_channels)]
-    channel_conditions = [[] for _ in range(sv.num_channels)]
-
-    for channel in range(sv.num_channels):
-        curr_note = 0
-        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens)
-        melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True)
-        args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
-        print "window", args.window
-        channel_conditions[channel] = similarity.get_prev_match_idx(origs[1:], args, sv)
-        for orig in origs:
-            if orig[0] == "rest":
-                event = sv.orig2e[channel][("rest", orig[1])]
-            else:
-                event = sv.orig2e[channel][orig]
-            channel_events[channel].append(event)
-            curr_note += 1
-    channel_event_idxs = [[e.i for e in channel_events[c]] for c in range(sv.num_channels)]
-    conditions = [channel_conditions[c] for c in range(sv.num_channels)]
-    return channel_event_idxs, conditions
-
 sv, _, _ = util.load_train_vocab(args)
 
 NO_INFO_EVENT_IDX = 3
@@ -161,7 +135,7 @@ for i in range(args.num_out):
     prev_hs = [hidden]
     gen_data = make_data_dict()
     gen_data["cuda"] = args.cuda
-    events, conditions = get_events_and_conditions(sv)
+    events, conditions = gen_util.get_events_and_conditions(sv, args)
     generated_events = [[] * sv.num_channels] # TODO
 
     for t in range(min(args.max_events, len(conditions[0]))):
@@ -197,7 +171,7 @@ for i in range(args.num_out):
             else:
                 generated_events[c].append(sv.i2e[c][word_idxs[c]])
 
-        if t >= args.condition_notes and word_idxs[0] == sv.special_events["end"].i:
+        if word_idxs[0] == sv.special_events["end"].i:
             break
 
     print i, zip(
