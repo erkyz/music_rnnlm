@@ -141,15 +141,15 @@ class XRNNModel(nn.Module):
             # Train mode
             prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-            to_concat = [prev_hs[-1]]
+            to_concat = []
             for b in range(batch_size):
                 # TODO idk what this does:
                 # prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
                 prev_idx = conditions[b][t] 
-                to_concat.append(prev_hs[prev_idx][b].unsqueeze(0))
-            # The trick here is that if we don't want to concat with a previous
-            # state, conditions[i] == -1.
-            new_h_t = torch.cat(to_concat, dim=1)
+                to_concat.append(
+                    torch.cat([prev_hs[-1][b].unsqueeze(0), prev_hs[prev_idx][b].unsqueeze(0)],
+                    dim=1))
+            new_h_t = torch.cat(to_concat, dim=0)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
             else:
@@ -240,7 +240,7 @@ class VineRNNModel(nn.Module):
             for b in range(batch_size):
                 # TODO make this work for LSTMs
                 to_cat.append(torch.unsqueeze(prev_hs[conditions[b][t]][b], 0))
-            new_h = torch.cat(to_cat, dim=1)
+            new_h = torch.cat(to_cat, dim=0)
             hidden = self.rnn(emb_t.squeeze(1), new_h)
             prev_hs.append(hidden)
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
