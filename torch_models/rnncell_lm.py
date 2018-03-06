@@ -56,7 +56,7 @@ class RNNCellModel(nn.Module):
         for i in range(self.num_channels):
             embs.append(self.drop(self.encoders[i](inputs[i])))
         rnn_input = torch.cat(embs, dim=2)
-        for i, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+        for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             hidden = self.rnn(emb_t.squeeze(1), hidden)
             output += [hidden[0]] if self.rnn_type == 'LSTM' else [hidden]
         output = torch.stack(output, 1)
@@ -138,21 +138,18 @@ class XRNNModel(nn.Module):
             embs.append(self.drop(self.encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
         if prev_hs is None:
-            # Generate mode
+            # Train mode
             prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-        if data["cuda"]:
-            to_concat = Variable(torch.cuda.FloatTensor(batch_size, self.hsize).zero_())
-        else:
-            to_concat = Variable(torch.FloatTensor(batch_size, self.hsize).zero_())
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+            to_concat = [prev_hs[-1]]
             for b in range(batch_size):
-                prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
-                to_concat[b].data.copy_(prev_hs[prev_idx][b].data)
+                # TODO idk what this does:
+                # prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
+                prev_idx = conditions[b][t] 
+                to_concat.append(prev_hs[prev_idx][b].unsqueeze(0))
             # The trick here is that if we don't want to concat with a previous
             # state, conditions[i] == -1.
-            new_h_t = torch.cat(
-                [prev_hs[-1], to_concat],
-                dim=1)
+            new_h_t = torch.cat(to_concat, dim=1)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
             else:
@@ -238,26 +235,12 @@ class VineRNNModel(nn.Module):
         rnn_input = torch.cat(embs, dim=2)
         if prev_hs is None:
             prev_hs = [hidden]
-        if self.rnn_type == 'LSTM':
-            if data["cuda"]:
-                copied_hs = [Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_()),
-                          Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())]
-            else:
-                copied_hs = [Variable(torch.FloatTensor(batch_size, self.nhid).zero_()),
-                          Variable(torch.FloatTensor(batch_size, self.nhid).zero_())]
-        else:
-            if data["cuda"]:
-                copied_hs = Variable(torch.cuda.FloatTensor(batch_size, self.nhid).zero_())
-            else:
-                copied_hs = Variable(torch.FloatTensor(batch_size, self.nhid).zero_())
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+            to_cat = []
             for b in range(batch_size):
-                if self.rnn_type == 'LSTM':
-                    for i in range(2):
-                        copied_hs[i][b].data.copy_(prev_hs[conditions[b][t]][i][b].data)
-                else:
-                    copied_hs[b].data.copy_(prev_hs[conditions[b][t]][b].data)
-            new_h = (copied_hs[0], copied_hs[1]) if self.rnn_type == 'LSTM' else copied_hs
+                # TODO make this work for LSTMs
+                to_cat.append(torch.unsqueeze(prev_hs[conditions[b][t]][b], 0))
+            new_h = torch.cat(to_cat, dim=1)
             hidden = self.rnn(emb_t.squeeze(1), new_h)
             prev_hs.append(hidden)
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
