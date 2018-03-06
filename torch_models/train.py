@@ -106,16 +106,15 @@ def repackage_hidden(h):
         return Variable(h.data)
     else:
         return tuple(repackage_hidden(v) for v in h)
-    return Variable(data, volatile=evaluation), Variable(target.view(-1))
 
 def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     """ Returns two Tensors corresponding to the batch """
-    def pad(tensor, length):
-        return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
+    def pad(tensor, length, val):
+        return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_() + val])
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx)) # TODO why was there a -1 here?
     source_slice = source[start_idx:start_idx+this_bsz]
-    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel, _ in source_slice]
+    target_slice = [[mel[i+1] for i in range(len(mel)-1)] + [PADDING] for mel, _ in source_slice]
     maxlen = len(source_slice[0][0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     conditions = torch.LongTensor(this_bsz,maxlen).zero_()
@@ -130,16 +129,16 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
         else:
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, mel_idxs)
         batch_conditions = similarity.get_prev_match_idx(ssm, args, sv)
-        # print zip(mel_idxs, range(len(mel_idxs)))
-        # print zip(batch_conditions, range(len(batch_conditions)))
-        data[b] = pad(torch.LongTensor(mel_idxs), maxlen)
+        print zip(mel_idxs, range(len(mel_idxs)))
+        print zip(batch_conditions, range(len(batch_conditions)))
+        data[b] = pad(torch.LongTensor(mel_idxs), maxlen, PADDING)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
-        conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen) 
+        conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen, -1) 
         t = target_slice[b] 
         for j in xrange(min(args.skip_first_n_note_losses, len(t))):
             t[j] = PADDING
-        target[b] = pad(torch.LongTensor(t), maxlen)
+        target[b] = pad(torch.LongTensor(t), maxlen, PADDING)
     if args.cuda: 
         data = data.cuda()
         conditions = conditions.cuda()
@@ -153,8 +152,11 @@ def get_batch(source, batch, bsz, sv):
     start_idx = batch * bsz
     this_bsz = min(bsz, (len(source) - start_idx))
     source_slice = source[start_idx:start_idx+this_bsz]
-    target_slice = [[mel[min(i+1,len(mel)-1)] for i in range(len(mel))] for mel, _ in source_slice]
+    target_slice = [[mel[i+1] for i in range(len(mel)-1)] + [PADDING] for mel, _ in source_slice]
     maxlen = len(source_slice[0][0])
+    print maxlen
+    print source_slice
+    print target_slice
     data = torch.LongTensor(this_bsz,maxlen).zero_()
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for i in range(this_bsz):
@@ -311,12 +313,6 @@ def train(x):
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
         optimizer.step()
-
-        '''
-        for p in model.parameters():
-            p.data.add_(-lr, p.grad.data)
-        '''
-
         total_loss += loss.data
   
     return total_loss[0] / len(train_mb_indices) 
