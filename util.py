@@ -46,6 +46,8 @@ def get_datadumpf(args):
         f += '_mostrecent'
     if args.arch in CONDITIONALS:
         f += '_condmod'
+    if args.arch == 'xrnn':
+        f += '_xrnn'
     f += '.p'
     return f
 
