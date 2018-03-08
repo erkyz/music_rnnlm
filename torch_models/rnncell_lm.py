@@ -91,8 +91,8 @@ class XRNNModel(nn.Module):
 
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
-        self.hsize = nhid
-        self.total_nhid = 2*nhid # because we concat 2 together
+        self.hsize = nhid/2
+        self.total_nhid = nhid # because we concat 2 together
         for i in range(self.num_channels):
             self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
         if args.rnn_type in ['LSTM', 'GRU']:

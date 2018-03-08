@@ -236,6 +236,9 @@ elif args.arch == "xrnn":
 elif args.arch == "cell":
     model = rnncell_lm.RNNCellModel(args) 
 elif args.arch == "vine":
+    if args.vanilla_ckpt != '':
+        with open(args.vanilla_ckpt, 'rb') as f:
+            vanilla_model = torch.load(f)
     model = rnncell_lm.VineRNNModel(args) 
 else:
     model = rnnlm.RNNModel(args)
@@ -245,7 +248,8 @@ if args.cuda:
     model.cuda()
 
 criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+# optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+optimizer = torch.optim.SGD(model.parameters(), lr=1)
 
 ###############################################################################
 # Get the data
@@ -306,15 +310,25 @@ def train(x):
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden)
+        '''
+        print hidden
+        assert(False)
+        '''
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
+        # TODO with multiple channels, this is a multiple of batch_size
         optimizer.zero_grad()
         loss.backward()
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
         optimizer.step()
+        '''
+        for p in model.parameters():
+            p.data.add_(-lr, p.grad.data)
+        '''
         total_loss += loss.data
-  
+ 
+    # divide by number of batches since we're cumulating the losses for each batch
     return total_loss[0] / len(train_mb_indices) 
 
 # Loop over epochs.
@@ -345,6 +359,7 @@ except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
 
+# TODO
 with open(args.save, 'wb') as f:
     torch.save(model, f)
 

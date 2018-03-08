@@ -169,7 +169,7 @@ def get_hid_sim(hiddens, args):
             # cosine similarity
             sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r))).data[0][0]
 
-    f = np.vectorize(lambda x : x >= 0.975)
+    f = np.vectorize(lambda x : x >= 0.95)
 
     return f(sims)
 
@@ -188,6 +188,9 @@ def get_rnn_ssm(args, sv, model, mel_idxs):
         hiddens.append(hidden)
     ssm = get_hid_sim(hiddens, args)
 
+    plt.imshow(ssm, cmap='gray', interpolation='nearest')
+    plt.show()
+
     return ssm
 
 
@@ -198,12 +201,15 @@ def get_prev_match_idx(ssm, args, sv):
         row_order = range(0,col)
         if args.most_recent:
             row_order = reversed(row_order)
+        '''
         for row in row_order:
             if ssm[row][col] == 1:
                 prev_idxs.append(row)
                 break
         if len(prev_idxs) == col:
             prev_idxs.append(-1)
+        '''
+        prev_idxs.append(-1)
     return prev_idxs
 
 
