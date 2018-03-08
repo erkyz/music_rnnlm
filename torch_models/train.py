@@ -248,8 +248,8 @@ if args.cuda:
     model.cuda()
 
 criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-# optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-optimizer = torch.optim.SGD(model.parameters(), lr=1)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+# optimizer = torch.optim.SGD(model.parameters(), lr=1)
 
 ###############################################################################
 # Get the data

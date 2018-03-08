@@ -91,22 +91,21 @@ class XRNNModel(nn.Module):
 
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
-        self.hsize = nhid/2
-        self.total_nhid = nhid # because we concat 2 together
+        self.nhid = nhid # output dimension
         for i in range(self.num_channels):
             self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
         if args.rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-                args.emsize*self.num_channels, self.total_nhid, nlayers)
+                args.emsize*self.num_channels, self.nhid, nlayers)
         else:
             try:
                 nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[args.rnn_type]
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(args.emsize, self.total_nhid, nlayers, nonlinearity=nonlinearity)
+            self.rnn = nn.RNN(args.emsize, self.nhid, nlayers, nonlinearity=nonlinearity)
         for i in range(len(ntokens)):
-            self.add_module('decoder_' + str(i), nn.Linear(self.total_nhid, ntokens[i])) 
+            self.add_module('decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
         self.decoders = AttrProxy(self, 'decoder_') 
 
@@ -117,6 +116,7 @@ class XRNNModel(nn.Module):
 
     def init_weights(self):
         initrange = 0.1
+        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 0.5)
         for i in range(self.num_channels):
             self.encoders[i].weight.data.uniform_(-initrange, initrange)
             self.decoders[i].bias.data.fill_(0)
@@ -145,18 +145,18 @@ class XRNNModel(nn.Module):
             for b in range(batch_size):
                 # TODO idk what this does:
                 # prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
-                prev_idx = conditions[b][t] 
+                prev_idx = conditions[b][t]
                 to_concat.append(
-                    torch.cat([prev_hs[-1][b].unsqueeze(0), prev_hs[prev_idx][b].unsqueeze(0)],
-                    dim=1))
+                    self.alpha*prev_hs[-1][b].unsqueeze(0)
+                    +(1-self.alpha)*prev_hs[prev_idx][b].unsqueeze(0))
             new_h_t = torch.cat(to_concat, dim=0)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
             else:
                 hidden = self.rnn(emb_t.squeeze(1), new_h_t)
             # For now, we're going to save all the prev_hs. if this is slow, we won't.
-            prev_hs.append(hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:,:self.hsize])
-            output += [hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:self.hsize]]
+            prev_hs.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
+            output += [prev_hs[-1]]
         output = torch.stack(output, 1)
         output = self.drop(output)
 
@@ -171,10 +171,10 @@ class XRNNModel(nn.Module):
         weight = next(self.parameters()).data
         # This is a little strange because the model actually has nhid units
         if self.rnn_type == 'LSTM':
-            return (Variable(weight.new(bsz, self.hsize).zero_()),
-                    Variable(weight.new(bsz, 2*self.hsize).zero_()))
+            return (Variable(weight.new(bsz, self.nhid).zero_()),
+                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
         else:
-            return Variable(weight.new(bsz, self.hsize).zero_())
+            return Variable(weight.new(bsz, self.nhid).zero_())
 
 
 class VineRNNModel(nn.Module):

@@ -188,8 +188,10 @@ def get_rnn_ssm(args, sv, model, mel_idxs):
         hiddens.append(hidden)
     ssm = get_hid_sim(hiddens, args)
 
+    '''
     plt.imshow(ssm, cmap='gray', interpolation='nearest')
     plt.show()
+    '''
 
     return ssm
 
