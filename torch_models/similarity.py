@@ -201,7 +201,6 @@ def get_prev_match_idx(ssm, args, sv):
         row_order = range(0,col)
         if args.most_recent:
             row_order = reversed(row_order)
-        '''
         for row in row_order:
             if ssm[row][col] == 1:
                 prev_idxs.append(row)
@@ -210,6 +209,7 @@ def get_prev_match_idx(ssm, args, sv):
             prev_idxs.append(-1)
         '''
         prev_idxs.append(-1)
+        '''
     return prev_idxs
 
 

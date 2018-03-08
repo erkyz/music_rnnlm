@@ -156,7 +156,7 @@ class XRNNModel(nn.Module):
                 hidden = self.rnn(emb_t.squeeze(1), new_h_t)
             # For now, we're going to save all the prev_hs. if this is slow, we won't.
             prev_hs.append(hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:,:self.hsize])
-            output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+            output += [hidden[0][:,:self.hsize] if self.rnn_type == 'LSTM' else hidden[:self.hsize]]
         output = torch.stack(output, 1)
         output = self.drop(output)
 
