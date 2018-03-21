@@ -12,7 +12,7 @@ def get_events(sv, args, mel_idxs):
             channel_event_idxs[channel].append(idx)
     return channel_event_idxs
 
-def get_events_and_conditions(sv, args):
+def get_events_and_conditions(sv, args, vanilla_model):
     if args.condition_piece == "":
         return [], []
 
@@ -21,10 +21,14 @@ def get_events_and_conditions(sv, args):
 
     for channel in range(sv.num_channels):
         origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens)
-        melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True)
-        args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
-        print "window", args.window
-        channel_conditions[channel] = similarity.get_prev_match_idx(origs[1:], args, sv)
+        if vanilla_model is None:
+            melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True)
+            args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
+            ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)
+        else:
+            idxs = [sv.orig2e[channel][o].i for o in origs][1:]
+            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, idxs)
+        channel_conditions[channel] = similarity.get_prev_match_idx(ssm, args, sv)
         for orig in origs:
             if orig[0] == "rest":
                 event = sv.orig2e[channel][("rest", orig[1])]

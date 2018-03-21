@@ -160,6 +160,8 @@ class XRNNModel(nn.Module):
         output = torch.stack(output, 1)
         output = self.drop(output)
 
+        print self.alpha
+
         decs = []
         for i in range(self.num_channels):
             decoded = self.decoders[i](

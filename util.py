@@ -41,13 +41,17 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 #### File utils
 
 def get_datadumpf(args):
-    f = args.tmp_prefix + '_batch_data_c' + str(args.c) + 'dt' + str(args.distance_threshold) + 'bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
+    f = args.tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
     if args.most_recent:
         f += '_mostrecent'
     if args.arch in CONDITIONALS:
         f += '_condmod'
     if args.arch == 'xrnn':
         f += '_xrnn'
+    if args.vanilla_ckpt != '':
+        f += '_vanilla'
+    else:
+        f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
     f += '.p'
     return f
 

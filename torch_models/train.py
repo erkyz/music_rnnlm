@@ -232,6 +232,7 @@ elif args.arch == "xrnn":
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
+            vanilla_model.eval()
     model = rnncell_lm.XRNNModel(args) 
 elif args.arch == "cell":
     model = rnncell_lm.RNNCellModel(args) 
@@ -239,6 +240,7 @@ elif args.arch == "vine":
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
+            vanilla_model.eval()
     model = rnncell_lm.VineRNNModel(args) 
 else:
     model = rnnlm.RNNModel(args)
@@ -359,9 +361,10 @@ except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
 
-# TODO
+'''
 with open(args.save, 'wb') as f:
     torch.save(model, f)
+'''
 
 # Load the best saved model.
 with open(args.save, 'rb') as f:

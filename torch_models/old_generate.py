@@ -64,6 +64,8 @@ parser.add_argument('--measure_tokens', action='store_true',
                     help='whether to have a token in between measures')
 
 # Stuff for diagonal detection
+parser.add_argument('--vanilla_ckpt', type=str,  default='',
+                    help='pretrained vanilla model dir')
 parser.add_argument('--window', type=int, default=8,
                     help='window size for note-based moving edit distances')
 parser.add_argument('--c', type=float, default=2,
@@ -96,14 +98,18 @@ if args.temperature < 1e-3:
 
 with open(args.checkpoint, 'rb') as f:
     model = torch.load(f)
+vanilla_model = None
+if args.vanilla_ckpt != '':
+    with open(args.vanilla_ckpt, 'rb') as f:
+        vanilla_model = torch.load(f)
 print model
 model.eval()
+vanilla_model.eval()
 
 if args.cuda:
     model.cuda()
 else:
     model.cpu()
-
 
 sv, _, _ = util.load_train_vocab(args)
 
@@ -122,19 +128,13 @@ for i in range(args.num_out):
     prev_hs = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
-    events, conditions = gen_util.get_events_and_conditions(sv, args)
+    events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
     generated_events = [[] * sv.num_channels] # TODO
 
     for t in range(min(args.max_events, len(conditions[0]))):
-        for c in range(sv.num_channels):
-            '''
-            fill_val = NO_INFO_EVENT_IDX
-            if args.arch in util.CONDITIONALS and t < len(conditions[c]):
-                prev_idx = conditions[c][t]
-                if prev_idx != -1 and prev_idx < len(generated_events[c])-1:
-                    fill_val = similarity.diff((generated_events[c][prev_idx].original,generated_events[c][prev_idx+1].original))[0]+1
-            '''
-            gen_data["conditions"][c].data.fill_(conditions[c][t])
+        if args.arch in util.CONDITIONALS:
+            for c in range(sv.num_channels):
+                gen_data["conditions"][c].data.fill_(conditions[c][t])
 
         for c in range(sv.num_channels):
             if t < args.condition_notes:
