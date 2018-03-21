@@ -42,11 +42,10 @@ class RNNCellModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        initrange = 0.1
         for i in range(self.num_channels):
-            self.encoders[i].weight.data.uniform_(-initrange, initrange)
+            nn.init.xavier_normal(self.encoders[i].weight.data)
+            nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
-            self.decoders[i].weight.data.uniform_(-initrange, initrange)
 
     def forward(self, data, hidden):
         inputs = data["data"]
@@ -115,12 +114,11 @@ class XRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        initrange = 0.1
         self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 0.5)
         for i in range(self.num_channels):
-            self.encoders[i].weight.data.uniform_(-initrange, initrange)
+            nn.init.xavier_normal(self.encoders[i].weight.data)
+            nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
-            self.decoders[i].weight.data.uniform_(-initrange, initrange)
 
     def forward(self, data, hidden, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
@@ -214,11 +212,10 @@ class VineRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        initrange = 0.1
         for i in range(self.num_channels):
-            self.encoders[i].weight.data.uniform_(-initrange, initrange)
+            nn.init.xavier_normal(self.encoders[i].weight.data)
+            nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
-            self.decoders[i].weight.data.uniform_(-initrange, initrange)
 
     def forward(self, data, hidden, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
