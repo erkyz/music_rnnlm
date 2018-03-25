@@ -47,7 +47,7 @@ class RNNCellModel(nn.Module):
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
-    def forward(self, data, hidden):
+    def forward(self, data, hidden, args):
         inputs = data["data"]
         output = []
         embs = []
@@ -66,6 +66,21 @@ class RNNCellModel(nn.Module):
             decoded = self.decoders[i](
                 output.view(output.size(0)*output.size(1), output.size(2)))
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
+
+        # For each, potentially change it so that the distribution is one-hot.
+        '''
+        if args.scheduled_sampling:
+            # With some probability, sample (for each in batch)
+            word_weights = [F.softmax(outputs[c].squeeze(1).data.div(args.temperature)).contiguous() for c in range(sv.num_channels)]
+            word_idxs = [torch.multinomial(word_weights[c], 1)[0] for c in range(sv.num_channels)]
+            prob_keep = args.num_epochs-args.num_epochs*args.epoch
+            output += [np.random.choice([model_output, sampled], 
+                        p=[prob_keep, 1-prob_keep]
+                        )[0]]
+        else:
+            output += [model_output]
+        '''
+
         return decs, hidden
 
     def init_hidden(self, bsz):
@@ -114,7 +129,7 @@ class XRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 0.5)
+        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 100.0)
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
@@ -125,6 +140,8 @@ class XRNNModel(nn.Module):
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
         ''' returns a list of outputs for each channel '''
+        sigmoid = nn.Sigmoid()
+        print sigmoid(self.alpha)
         # list of (bsz,seqlen)
         inputs = data["data"]
         # data["conditions"] is a list of (bsz,seqlen)
@@ -143,10 +160,10 @@ class XRNNModel(nn.Module):
             for b in range(batch_size):
                 # TODO idk what this does:
                 # prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
-                prev_idx = conditions[b][t]
+                prev_idx = conditions[b][t] if t > data["skip"] else -1
                 to_concat.append(
-                    self.alpha*prev_hs[-1][b].unsqueeze(0)
-                    +(1-self.alpha)*prev_hs[prev_idx][b].unsqueeze(0))
+                    sigmoid(self.alpha)*prev_hs[-1][b].unsqueeze(0)
+                    +(1-sigmoid(self.alpha))*prev_hs[prev_idx][b].unsqueeze(0))
             new_h_t = torch.cat(to_concat, dim=0)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
@@ -157,8 +174,6 @@ class XRNNModel(nn.Module):
             output += [prev_hs[-1]]
         output = torch.stack(output, 1)
         output = self.drop(output)
-
-        print self.alpha
 
         decs = []
         for i in range(self.num_channels):

@@ -40,8 +40,9 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 
 #### File utils
 
-def get_datadumpf(args):
-    f = args.tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
+def get_datadumpf(args, extra=''):
+    tmp_prefix = '../tmp/' + args.tmp_prefix
+    f = tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
     if args.most_recent:
         f += '_mostrecent'
     if args.arch in CONDITIONALS:
@@ -52,24 +53,38 @@ def get_datadumpf(args):
         f += '_vanilla'
     else:
         f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
-    f += '.p'
+    f += extra + '.p'
     return f
 
+def get_savef(args, corpus, extra=''):
+    tmp_prefix = '../tmp/' 
+    f = tmp_prefix + args.arch + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses) + 'vsize' + str(corpus.vocab.sizes[0]) + 'nh' + str(args.nhid) + 'em' + str(args.emsize)
+    if args.most_recent:
+        f += '_mostrecent'
+    if args.vanilla_ckpt != '':
+        f += '_vanilla'
+    else:
+        f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
+    f += extra + '.p'
+    return f
+
+
 def load_train_vocab(args):
+    tmp_prefix = '../tmp/' + args.tmp_prefix
     if args.measure_tokens:
-        args.tmp_prefix += '_mt'
+        tmp_prefix += '_mt'
     if args.factorize:
         if args.progress_tokens:
-            vocabf = args.tmp_prefix + '_sv_factorized_measuretokens.p'
-            corpusf = args.tmp_prefix + '_corpus_factorized_measuretokens.p'
+            vocabf = tmp_prefix + '_sv_factorized_measuretokens.p'
+            corpusf = tmp_prefix + '_corpus_factorized_measuretokens.p'
             sv = FactorPDMVocab.load_from_corpus(args.data, vocabf)
         else:
-            vocabf = args.tmp_prefix + '_sv_factorized.p'
-            corpusf = args.tmp_prefix + '_corpus_factorized.p'
+            vocabf = tmp_prefix + '_sv_factorized.p'
+            corpusf = tmp_prefix + '_corpus_factorized.p'
             sv = FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
     else:
-        vocabf = args.tmp_prefix + '_sv.p'
-        corpusf = args.tmp_prefix + '_corpus.p'
+        vocabf = tmp_prefix + '_sv.p'
+        corpusf = tmp_prefix + '_corpus.p'
         sv = PitchDurationVocab.load_from_corpus(args.data, vocabf)
 
     return sv, vocabf, corpusf
@@ -197,7 +212,7 @@ class PitchDurationVocab(SimpleVocab):
                 }
 
     @classmethod
-    def mid2orig(clss, midf, include_measure_boundaries, channel=0):
+    def mid2orig(clss, midf, include_measure_boundaries, channel):
         score = music21.converter.parse(midf)
         out = [(START_OF_TRACK_NAME, START_OF_TRACK_NAME)]
         time_signature = get_ts(score)

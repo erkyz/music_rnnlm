@@ -5,12 +5,14 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 import sys, os
 import argparse, pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import data, util, similarity, beam_search, gen_util
 
+'''
 parser = argparse.ArgumentParser()
 
 # Data stuff
@@ -20,18 +22,6 @@ parser.add_argument('--tmp_prefix', type=str, default="../tmp/cmaj_nott",
                     help='tmp directory + prefix for tmp files')
 parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
-
-# Generate stuff
-parser.add_argument('--max_events', type=int, default='250',
-                    help='number of words to generate')
-parser.add_argument('--num_out', type=int, default='10',
-                    help='number of melodies to generate')
-parser.add_argument('--beam_size', type=int, default='3',
-                    help='beam size')
-parser.add_argument('--temperature', type=float, default=1.0,
-                    help='temperature - higher will increase diversity')
-parser.add_argument('--condition_piece', type=str, default="",
-                    help='midi piece to condition on')
 
 # RNN params
 parser.add_argument('--arch', type=str, default='base')
@@ -98,50 +88,47 @@ if torch.cuda.is_available():
 if args.temperature < 1e-3:
     parser.error("--temperature has to be greater or equal 1e-3")
 
-with open(args.checkpoint, 'rb') as f:
-    model = torch.load(f)
-model.eval()
-vanilla_model = None
-if args.vanilla_ckpt != '':
-    with open(args.vanilla_ckpt, 'rb') as f:
-        vanilla_model = torch.load(f)
+'''
 
-if args.cuda:
-    model.cuda()
-else:
-    model.cpu()
-
-sv, _, _ = util.load_train_vocab(args)
-
-hidden = model.init_hidden(1) 
-prev_hs = [hidden]
-gen_data = gen_util.make_data_dict(args, sv)
-gen_data["cuda"] = args.cuda
-events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
-print zip(events[0], range(len(events[0])))
-print zip(conditions[0], range(len(conditions[0])))
-
-for t in range(min(args.max_events, len(conditions[0]))):    
+def get_hiddens(model, h0, args, sv):
+    prev_hs = [h0]
+    gen_data = gen_util.make_data_dict(args, sv)
+    gen_data["cuda"] = args.cuda
     if args.arch in util.CONDITIONALS:
-        for c in range(sv.num_channels):
-            gen_data["conditions"][c].data.fill_(conditions[c][t])
-
-    for c in range(sv.num_channels):
-        gen_data["data"][c].data.fill_(events[c][t])
-
-    if args.arch == "hrnn":
-        outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-    elif args.arch == 'vine' or args.arch == 'xrnn':
-        # prev_hs modified in place
-        outputs, hidden = model(gen_data, hidden, prev_hs)
+        events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
     else:
-        outputs, hidden = model(gen_data, hidden)
+        events = gen_util.get_events(sv, args, args.condition_piece)
+    print zip(events[0], range(len(events[0])))
+    # print zip(conditions[0], range(len(conditions[0])))
 
-print len(prev_hs)
-sims = similarity.get_hid_sim(prev_hs, args)
-print sims
-pickle.dump(sims, open("../tmp/test2.p", 'wb'))
+    hidden = h0
+    for t in range(min(args.max_events, len(events[0]))):
+        if args.arch in util.CONDITIONALS:
+            for c in range(sv.num_channels):
+                gen_data["conditions"][c].data.fill_(conditions[c][t])
 
-plt.imshow(sims, cmap='gray', interpolation='nearest')
-plt.savefig('test.png')
+        for c in range(sv.num_channels):
+            gen_data["data"][c].data.fill_(events[c][t])
+
+        if args.arch == "hrnn":
+            outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+        elif args.arch == 'vine' or args.arch == 'xrnn':
+            # prev_hs modified in place
+            outputs, hidden = model(gen_data, hidden, prev_hs)
+        else:
+            outputs, hidden = model(gen_data, hidden)
+            prev_hs.append(hidden)
+
+    print len(prev_hs)
+    print prev_hs[0]
+    sims = similarity.get_hid_sim(prev_hs, args, False)
+    print sims
+    pickle.dump(sims, open("../tmp/test1.p", 'wb'))
+    sims = similarity.get_hid_sim(prev_hs, args, True)
+    pickle.dump(sims, open("../tmp/test2.p", 'wb'))
+
+    '''
+    plt.imshow(sims, cmap='gray', interpolation='nearest')
+    plt.savefig('test.png')
+    '''
 

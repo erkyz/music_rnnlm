@@ -97,7 +97,7 @@ def get_events_and_conditions(sv):
 
     for channel in range(sv.num_channels):
         curr_note = 0
-        origs, _ = sv.mid2orig(args.condition_piece, channel)
+        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel)
         channel_conditions[channel] = similarity.get_future_from_past(origs[1:], args)
 
         for orig in origs:

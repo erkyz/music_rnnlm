@@ -160,7 +160,7 @@ def get_note_ssm_future(melody, args, bnw=False):
     return ssm, rawDiffs
 
 
-def get_hid_sim(hiddens, args):
+def get_hid_sim(hiddens, args, bnw=True):
     sims = np.zeros([len(hiddens), len(hiddens)])
     for i in range(len(hiddens)):
         for j in range(i, len(hiddens)):
@@ -168,18 +168,13 @@ def get_hid_sim(hiddens, args):
             r = hiddens[0][j] if args.arch == 'LSTM' else hiddens[j]
             # cosine similarity
             sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r))).data[0][0]
-
     f = np.vectorize(lambda x : x >= 0.95)
+    return f(sims) if bnw else sims
 
-    return f(sims)
 
-
-def get_rnn_ssm(args, sv, model, mel_idxs):
-    # Construct the proper batch
+def get_rnn_ssm(args, sv, model, events):
     hidden = model.init_hidden(1) 
     gen_data = gen_util.make_data_dict(args, sv)
-    events = gen_util.get_events(sv, args, [mel_idxs])
-
     hiddens = []
     for t in range(len(events[0])):
         for c in range(sv.num_channels):
@@ -187,12 +182,6 @@ def get_rnn_ssm(args, sv, model, mel_idxs):
         outputs, hidden = model(gen_data, hidden)
         hiddens.append(hidden)
     ssm = get_hid_sim(hiddens, args)
-
-    '''
-    plt.imshow(ssm, cmap='gray', interpolation='nearest')
-    plt.show()
-    '''
-
     return ssm
 
 

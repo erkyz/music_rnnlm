@@ -5,10 +5,12 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import similarity, util
 
-def get_events(sv, args, mel_idxs):
+def get_events(sv, args, midf):
     channel_event_idxs = [[] for _ in range(sv.num_channels)]
     for channel in range(sv.num_channels):
-        for idx in mel_idxs[channel]:
+        origs, _ = sv.mid2orig(midf, include_measure_boundaries=args.measure_tokens, channel=channel)
+        mel_idxs = [sv.orig2e[channel][o].i for o in origs]
+        for idx in mel_idxs:
             channel_event_idxs[channel].append(idx)
     return channel_event_idxs
 
@@ -20,14 +22,14 @@ def get_events_and_conditions(sv, args, vanilla_model):
     channel_conditions = [[] for _ in range(sv.num_channels)]
 
     for channel in range(sv.num_channels):
-        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens)
+        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel)
         if vanilla_model is None:
-            melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True)
+            melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True, channel=channel)
             args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
             ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)
         else:
-            idxs = [sv.orig2e[channel][o].i for o in origs][1:]
-            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, idxs)
+            events = gen_util.get_events(sv, args, args.condition_piece)
+            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, events)
         channel_conditions[channel] = similarity.get_prev_match_idx(ssm, args, sv)
         for orig in origs:
             if orig[0] == "rest":

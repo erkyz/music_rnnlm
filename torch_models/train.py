@@ -18,6 +18,7 @@ import util
 import data
 import rnnlm, rnncell_lm, hrnnlm
 import similarity
+import get_hiddens
 
 # event index for padding
 PADDING = 0
@@ -27,10 +28,10 @@ parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Mod
 # Data stuff
 parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
-parser.add_argument('--tmp_prefix', type=str, default="../tmp/cmaj_nott",
+parser.add_argument('--tmp_prefix', type=str, default="cmaj_nott",
                     help='tmp directory + prefix for tmp files')
-parser.add_argument('--save', type=str,  default='../tmp/model.pt',
-                    help='path to save the final model')
+parser.add_argument('--save', type=str, default="",
+                    help='override default model save filename')
 
 # RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
@@ -74,8 +75,18 @@ parser.add_argument('--distance_threshold', type=int, default=3,
 parser.add_argument('--most_recent', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
 
+# "Get hiddens" stuff
+parser.add_argument('--max_events', type=int, default='250',
+                    help='number of words to generate')
+parser.add_argument('--temperature', type=float, default=1.0,
+                    help='temperature - higher will increase diversity')
+parser.add_argument('--condition_piece', type=str, default="",
+                    help='midi piece to condition on')
+parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
+                    help='model checkpoint to use')
 
 # Meta-training stuff
+parser.add_argument('--mode', type=str, default='train')
 parser.add_argument('--skip_first_n_note_losses', type=int, default=0,
                     help='"encode" first n bars')
 parser.add_argument('--seed', type=int, default=1111,
@@ -127,10 +138,10 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
             args.window = source_slice[b][1]
             ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=True)
         else:
-            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, mel_idxs)
+            ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
         batch_conditions = similarity.get_prev_match_idx(ssm, args, sv)
-        print zip(mel_idxs, range(len(mel_idxs)))
-        print zip(batch_conditions, range(len(batch_conditions)))
+        # print zip(mel_idxs, range(len(mel_idxs)))
+        # print zip(batch_conditions, range(len(batch_conditions)))
         data[b] = pad(torch.LongTensor(mel_idxs), maxlen, PADDING)
         # We pad the end of conditions with zeros, which is technically incorrect.
         # But because the outputs are ignored anyways, we don't care.
@@ -226,32 +237,47 @@ print "Time elapsed", time.time() - t
 
 args.ntokens = sv.sizes
 vanilla_model = None
-if args.arch == "hrnn":
-    model = hrnnlm.FactorHRNNModel(args)
-elif args.arch == "xrnn":
+if args.mode == 'train':
+    if args.arch == "hrnn":
+        model = hrnnlm.FactorHRNNModel(args)
+    elif args.arch == "xrnn":
+        if args.vanilla_ckpt != '':
+            with open(args.vanilla_ckpt, 'rb') as f:
+                vanilla_model = torch.load(f)
+                # vanilla_model.eval()
+        model = rnncell_lm.XRNNModel(args) 
+    elif args.arch == "cell":
+        model = rnncell_lm.RNNCellModel(args) 
+    elif args.arch == "vine":
+        if args.vanilla_ckpt != '':
+            with open(args.vanilla_ckpt, 'rb') as f:
+                vanilla_model = torch.load(f)
+                vanilla_model.eval()
+        model = rnncell_lm.VineRNNModel(args) 
+    else:
+        model = rnnlm.RNNModel(args)
+
+    criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+elif args.mode == 'get_hiddens':
+    args.batch_size = 1
+    with open(args.checkpoint, 'rb') as f:
+        model = torch.load(f)
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
-            vanilla_model.eval()
-    model = rnncell_lm.XRNNModel(args) 
-elif args.arch == "cell":
-    model = rnncell_lm.RNNCellModel(args) 
-elif args.arch == "vine":
-    if args.vanilla_ckpt != '':
-        with open(args.vanilla_ckpt, 'rb') as f:
-            vanilla_model = torch.load(f)
-            vanilla_model.eval()
-    model = rnncell_lm.VineRNNModel(args) 
 else:
-    model = rnnlm.RNNModel(args)
+    print "Mode not supported."
+    sys.exit()
+
 print model
 
 if args.cuda:
     model.cuda()
+else:
+    model.cpu()
 
-criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-# optimizer = torch.optim.SGD(model.parameters(), lr=1)
 
 ###############################################################################
 # Get the data
@@ -289,11 +315,13 @@ def evaluate(eval_data, mb_indices):
         data = get_batch_variables(eval_data, batch, evaluation=True)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
+        data["skip"] = args.skip_first_n_note_losses
         outputs, hidden = model(data, hidden)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
-        hidden = repackage_hidden(hidden)
+        # hidden = repackage_hidden(hidden)
+        hidden = model.init_hidden(args.batch_size)
     return total_loss[0] / len(mb_indices)
 
 def train(x):
@@ -308,14 +336,12 @@ def train(x):
         data = get_batch_variables(train_data, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
-        hidden = repackage_hidden(hidden)
+        # hidden = repackage_hidden(hidden)
+        hidden = model.init_hidden(args.batch_size)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
+        data["skip"] = args.skip_first_n_note_losses
         outputs, hidden = model(data, hidden)
-        '''
-        print hidden
-        assert(False)
-        '''
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
         # TODO with multiple channels, this is a multiple of batch_size
@@ -336,45 +362,59 @@ def train(x):
 # Loop over epochs.
 lr = args.lr
 best_val_loss = None
+losses = {'train': [], 'valid': []}
 
-# At any point you can hit Ctrl + C to break out of training early.
-try:
-    for epoch in range(1, args.epochs+1):
-        epoch_start_time = time.time()
-        x = epoch == 100
-        train_loss = train(x) # TODO
-        val_loss = evaluate(valid_data, valid_mb_indices)
+if args.mode == 'train':
+    # At any point you can hit Ctrl + C to break out of training early.
+    try:
+        for epoch in range(1, args.epochs+1):
+            epoch_start_time = time.time()
+            x = epoch == 100
+            train_loss = train(x) # TODO
+            val_loss = evaluate(valid_data, valid_mb_indices)
+            print('-' * 89)
+            print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
+                    'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time), train_loss,
+                                               val_loss, math.exp(val_loss)))
+            print('-' * 89)
+            losses["train"].append(train_loss)
+            losses["valid"].append(val_loss)
+            pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
+            # Save the model if the validation loss is the best we've seen so far.
+            if not best_val_loss or val_loss < best_val_loss:
+                with open(args.save if args.save != '' else util.get_savef(args, corpus), 'wb') as f:
+                    torch.save(model, f)
+                best_val_loss = val_loss
+            else:
+                # Anneal the learning rate if no improvement has been seen in the validation dataset.
+                lr /= 4.0
+    except KeyboardInterrupt:
         print('-' * 89)
-        print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
-                'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time), train_loss,
-                                           val_loss, math.exp(val_loss)))
-        print('-' * 89)
-        # Save the model if the validation loss is the best we've seen so far.
-        if not best_val_loss or val_loss < best_val_loss:
-            with open(args.save, 'wb') as f:
-                torch.save(model, f)
-            best_val_loss = val_loss
-        else:
-            # Anneal the learning rate if no improvement has been seen in the validation dataset.
-            lr /= 4.0
-except KeyboardInterrupt:
-    print('-' * 89)
-    print('Exiting from training early')
+        print('Exiting from training early')
 
-'''
-with open(args.save, 'wb') as f:
-    torch.save(model, f)
-'''
+    # Load the best saved model.
+    with open(args.save if args.save != '' else util.get_savef(args, corpus), 'rb') as f:
+        print("Saving model")
+        model = torch.load(f)
 
-# Load the best saved model.
-with open(args.save, 'rb') as f:
-    print("Saving model")
-    model = torch.load(f)
+    # Run on test data.
+    test_loss = evaluate(test_data, test_mb_indices)
+    print('=' * 89)
+    print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
+        test_loss, math.exp(test_loss)))
+    print('=' * 89)
 
-# Run on test data.
-test_loss = evaluate(test_data, test_mb_indices)
-print('=' * 89)
-print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
-    test_loss, math.exp(test_loss)))
-print('=' * 89)
+elif args.mode == 'get_hiddens':
+    model.eval()
+    hidden = model.init_hidden(1)
+    random.shuffle(train_mb_indices)
+    for batch in train_mb_indices:
+        data = get_batch_variables(train_data, batch, evaluation=True)
+        if args.arch == "hrnn":       
+            data["special_event"] = corpus.vocab.special_events['measure'].i
+        _, hidden = model(data, hidden)
+        hidden = repackage_hidden(hidden)
+    
+    get_hiddens.get_hiddens(model, hidden, args, corpus.vocab)
+
 
