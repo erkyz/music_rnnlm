@@ -315,8 +315,7 @@ def evaluate(eval_data, mb_indices):
         data = get_batch_variables(eval_data, batch, evaluation=True)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
-        data["skip"] = args.skip_first_n_note_losses
-        outputs, hidden = model(data, hidden)
+        outputs, hidden = model(data, hidden, args)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
@@ -324,6 +323,7 @@ def evaluate(eval_data, mb_indices):
         hidden = model.init_hidden(args.batch_size)
     return total_loss[0] / len(mb_indices)
 
+# TODO get rid of the x param
 def train(x):
     # Turn on training mode which enables dropout.
     model.train()
@@ -340,8 +340,7 @@ def train(x):
         hidden = model.init_hidden(args.batch_size)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
-        data["skip"] = args.skip_first_n_note_losses
-        outputs, hidden = model(data, hidden)
+        outputs, hidden = model(data, hidden, args)
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
         # TODO with multiple channels, this is a multiple of batch_size
@@ -368,8 +367,9 @@ if args.mode == 'train':
     # At any point you can hit Ctrl + C to break out of training early.
     try:
         for epoch in range(1, args.epochs+1):
+            args.epoch = epoch-1
             epoch_start_time = time.time()
-            x = epoch == 100
+            x = (epoch == 100)
             train_loss = train(x) # TODO
             val_loss = evaluate(valid_data, valid_mb_indices)
             print('-' * 89)

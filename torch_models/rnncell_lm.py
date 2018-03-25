@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F
+import random
 import time, util
 
 class AttrProxy(object):
@@ -47,6 +49,38 @@ class RNNCellModel(nn.Module):
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
+    # scheduled sampler
+    def forward(self, data, hidden, args):
+        inputs = data["data"]
+        batch_size = inputs[0].size(0)
+        # linear annealing 
+        prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
+         
+        decs = [[]*self.num_channels]
+        tmp = []
+        for c in range(self.num_channels):
+            tmp.append(self.drop(self.encoders[c](inputs[c][:,0])))
+        emb_t = torch.cat(tmp, dim=1)
+        for t in range(inputs[0].size(1)):
+            hidden = self.rnn(emb_t, hidden)
+            out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
+            out_t = self.drop(out_t)
+            tmp = []
+            for c in range(self.num_channels):
+                decoded = self.decoders[c](out_t)
+                decs[c].append(decoded.unsqueeze(1))
+                weights = F.softmax(decoded.data.div(args.temperature)).contiguous()
+                sampled_idxs = torch.multinomial(weights, 1)
+                idx = inputs[c][:,t] if random.random() < prob_gold else sampled_idxs.squeeze()
+                tmp.append(self.drop(self.encoders[c](idx)))
+            emb_t = torch.cat(tmp, dim=1)
+
+        for c in range(self.num_channels):
+            decs[c] = torch.cat(decs[c], dim=1)
+
+        return decs, hidden
+
+    '''
     def forward(self, data, hidden, args):
         inputs = data["data"]
         output = []
@@ -56,6 +90,7 @@ class RNNCellModel(nn.Module):
             embs.append(self.drop(self.encoders[i](inputs[i])))
         rnn_input = torch.cat(embs, dim=2)
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+            # emb_t is [bsz x 1 x emsize]
             hidden = self.rnn(emb_t.squeeze(1), hidden)
             output += [hidden[0]] if self.rnn_type == 'LSTM' else [hidden]
         output = torch.stack(output, 1)
@@ -66,22 +101,8 @@ class RNNCellModel(nn.Module):
             decoded = self.decoders[i](
                 output.view(output.size(0)*output.size(1), output.size(2)))
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-
-        # For each, potentially change it so that the distribution is one-hot.
-        '''
-        if args.scheduled_sampling:
-            # With some probability, sample (for each in batch)
-            word_weights = [F.softmax(outputs[c].squeeze(1).data.div(args.temperature)).contiguous() for c in range(sv.num_channels)]
-            word_idxs = [torch.multinomial(word_weights[c], 1)[0] for c in range(sv.num_channels)]
-            prob_keep = args.num_epochs-args.num_epochs*args.epoch
-            output += [np.random.choice([model_output, sampled], 
-                        p=[prob_keep, 1-prob_keep]
-                        )[0]]
-        else:
-            output += [model_output]
-        '''
-
         return decs, hidden
+    '''
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -135,7 +156,7 @@ class XRNNModel(nn.Module):
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
-    def forward(self, data, hidden, prev_hs=None):
+    def forward(self, data, hidden, args, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
@@ -160,7 +181,7 @@ class XRNNModel(nn.Module):
             for b in range(batch_size):
                 # TODO idk what this does:
                 # prev_idx = conditions[b][0] if prev_hs is None else conditions[b][t] 
-                prev_idx = conditions[b][t] if t > data["skip"] else -1
+                prev_idx = conditions[b][t] if t > args.skip_first_n_note_losses else -1
                 to_concat.append(
                     sigmoid(self.alpha)*prev_hs[-1][b].unsqueeze(0)
                     +(1-sigmoid(self.alpha))*prev_hs[prev_idx][b].unsqueeze(0))
