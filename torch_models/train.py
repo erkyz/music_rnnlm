@@ -264,6 +264,7 @@ if args.mode == 'train':
     else:
         model = rnnlm.RNNModel(args)
 
+    sigmoid = nn.Sigmoid()
     criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -339,6 +340,8 @@ def train():
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
+    if args.arch == 'xrnn':
+        print sigmoid(model.alpha)[0]
     for batch in train_mb_indices:
         data = get_batch_variables(train_data, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
@@ -356,10 +359,6 @@ def train():
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm(model.parameters(), args.clip)
         optimizer.step()
-        '''
-        for p in model.parameters():
-            p.data.add_(-lr, p.grad.data)
-        '''
         total_loss += loss.data
  
     # divide by number of batches since we're cumulating the losses for each batch
@@ -414,6 +413,7 @@ elif args.mode == 'generate':
     old_generate.generate(model, args, corpus.vocab, vanilla_model)
 
 elif args.mode == 'get_hiddens':
-    get_hiddens.get_hiddens(model, args, corpus.vocab)
+    args.epoch = 0
+    get_hiddens.get_hiddens(model, args, corpus.vocab, vanilla_model)
 
 

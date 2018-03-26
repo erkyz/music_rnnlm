@@ -100,10 +100,10 @@ if args.temperature < 1e-3:
 
 NO_INFO_EVENT_IDX = 3
 
-def generate(model, args, sv, vanilla_model):
+def generate(model, args, sv, vanilla_model=None):
     model.eval()
     for i in range(args.num_out):
-        torch.manual_seed(i)
+        torch.manual_seed(i*args.seed)
 
         hidden = model.init_hidden(1) 
         prev_hs = [hidden]

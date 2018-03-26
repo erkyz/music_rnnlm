@@ -90,7 +90,7 @@ if args.temperature < 1e-3:
 
 '''
 
-def get_hiddens(model, args, sv):
+def get_hiddens(model, args, sv, vanilla_model=None):
     prev_hs = [model.init_hidden(1)]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
@@ -98,8 +98,10 @@ def get_hiddens(model, args, sv):
         events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
     else:
         events = gen_util.get_events(sv, args, args.condition_piece)
+    '''
     print zip(events[0], range(len(events[0])))
-    # print zip(conditions[0], range(len(conditions[0])))
+    print zip(conditions[0], range(len(conditions[0])))
+    '''
 
     for t in range(min(args.max_events, len(events[0]))):
         if args.arch in util.CONDITIONALS:
@@ -118,8 +120,6 @@ def get_hiddens(model, args, sv):
             outputs, hidden = model(gen_data, prev_hs[-1], args)
             prev_hs.append(hidden)
 
-    print len(prev_hs)
-    print prev_hs[0]
     sims = similarity.get_hid_sim(prev_hs, args, False)
     print sims
     pickle.dump(sims, open("../tmp/test1.p", 'wb'))

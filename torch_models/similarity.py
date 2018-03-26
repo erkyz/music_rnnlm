@@ -167,7 +167,7 @@ def get_hid_sim(hiddens, args, bnw=True):
             l = hiddens[0][i] if args.arch == 'LSTM' else hiddens[i]
             r = hiddens[0][j] if args.arch == 'LSTM' else hiddens[j]
             # cosine similarity
-            sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r))).data[0][0]
+            sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r) + .000001)).data[0][0] if not torch.equal(l.data, r.data) else 1
     f = np.vectorize(lambda x : x >= 0.95)
     return f(sims) if bnw else sims
 
@@ -179,7 +179,8 @@ def get_rnn_ssm(args, sv, model, events):
     for t in range(len(events[0])):
         for c in range(sv.num_channels):
             gen_data["data"][c].data.fill_(events[c][t])
-        outputs, hidden = model(gen_data, hidden)
+        args.epoch = 0
+        outputs, hidden = model(gen_data, hidden, args)
         hiddens.append(hidden)
     ssm = get_hid_sim(hiddens, args)
     return ssm
@@ -188,8 +189,8 @@ def get_rnn_ssm(args, sv, model, events):
 def get_prev_match_idx(ssm, args, sv):
     prev_idxs = []
     # scan left to right. simplified for now to only 0's and 1's, so simpler here too.
-    for col in range(ssm.shape[0]-1):
-        row_order = range(0,col)
+    for col in range(ssm.shape[0]):
+        row_order = range(col)
         if args.most_recent:
             row_order = reversed(row_order)
         for row in row_order:

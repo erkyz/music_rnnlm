@@ -154,7 +154,7 @@ class XRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 0.0)
+        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 5.0)
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
@@ -162,7 +162,6 @@ class XRNNModel(nn.Module):
 
     def forward(self, data, hidden, args, prev_hs=None):
         sigmoid = nn.Sigmoid()
-        print sigmoid(self.alpha)
         # linear annealing 
         prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
 

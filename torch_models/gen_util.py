@@ -28,7 +28,7 @@ def get_events_and_conditions(sv, args, vanilla_model):
             args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
             ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)
         else:
-            events = gen_util.get_events(sv, args, args.condition_piece)
+            events = get_events(sv, args, args.condition_piece)
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, events)
         channel_conditions[channel] = similarity.get_prev_match_idx(ssm, args, sv)
         for orig in origs:
