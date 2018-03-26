@@ -57,6 +57,9 @@ parser.add_argument('--tied', action='store_true',
                     help='tie the word embedding and softmax weights')
 parser.add_argument('--factorize', action='store_true',
                     help='whether to factorize embeddings')
+parser.add_argument('--ss', action='store_true',
+                    help='scheduled sampling')
+
 
 # Stuff for measure splitting
 parser.add_argument('--progress_tokens', action='store_true',

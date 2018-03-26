@@ -40,13 +40,15 @@ BSZ=52
 EMSIZE=200
 DROP=0.5
 NL=1
-EPOCHS=200
+EPOCHS=500
 LR=0.0005
-OUTF=$ARCH"_nh"$NHID
-VANILLA_FNAME='../tmp/vanilla2.pt'
+OUTF='test_xrnn'
+VANILLA_FNAME='../tmp/vanilla4.pt'
 
-python train.py --save=$VANILLA_FNAME --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch='cell' --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --most_recent --cuda
-python train.py --arch='cell' --checkpoint=$VANILLA_FNAME --cuda --tmp_prefix=$TMP_PREFIX --condition_piece="../music_data/CMaj_Jigs/train/jigs_simple_chords_90.mid" --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE --c=$C --most_recent --mode='generate' --condition_notes=$CONDITION_NOTES
+# TODO this is temporary
+python train.py --save=$VANILLA_FNAME --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch='cell' --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=150 --most_recent --cuda
+python train.py --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --most_recent --cuda --vanilla=$VANILLA_FNAME
+python train.py --arch=$ARCH --checkpoint=$VANILLA_FNAME --cuda --tmp_prefix=$TMP_PREFIX --condition_piece="../music_data/CMaj_Jigs/train/jigs_simple_chords_90.mid" --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE --c=$C --most_recent --mode='generate' --condition_notes=$CONDITION_NOTES --outf=$OUTF --vanilla=$VANILLA_FNAME
 
 # python train.py --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --most_recent --cuda --vanilla_ckpt=$VANILLA_FNAME
 # python old_generate.py --arch=$ARCH --outf=$ARCH"_nh"$NHID --checkpoint=$FILE_NAME --tmp_prefix=$TMP_PREFIX --num_out=5 --condition_piece="../music_data/CMaj_Nottingham/train/jigs_simple_chords_90.mid" --condition_notes=$CONDITION_NOTES --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE --c=$C --most_recent --vanilla_ckpt=$VANILLA_FNAME --cuda

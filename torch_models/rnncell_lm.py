@@ -50,7 +50,7 @@ class RNNCellModel(nn.Module):
             self.decoders[i].bias.data.fill_(0)
 
     # scheduled sampler
-    def forward(self, data, hidden, args):
+    def forward_ss(self, data, hidden, args):
         inputs = data["data"]
         batch_size = inputs[0].size(0)
         # linear annealing 
@@ -84,29 +84,30 @@ class RNNCellModel(nn.Module):
 
         return decs, hidden
 
-    '''
     def forward(self, data, hidden, args):
-        inputs = data["data"]
-        output = []
-        embs = []
-        batch_size = inputs[0].size(0)
-        for i in range(self.num_channels):
-            embs.append(self.drop(self.encoders[i](inputs[i])))
-        rnn_input = torch.cat(embs, dim=2)
-        for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-            # emb_t is [bsz x 1 x emsize]
-            hidden = self.rnn(emb_t.squeeze(1), hidden)
-            output += [hidden[0]] if self.rnn_type == 'LSTM' else [hidden]
-        output = torch.stack(output, 1)
-        output = self.drop(output)
+        if args.ss:
+            return self.forward_ss(data, hidden, args)
+        else:
+            inputs = data["data"]
+            output = []
+            embs = []
+            batch_size = inputs[0].size(0)
+            for i in range(self.num_channels):
+                embs.append(self.drop(self.encoders[i](inputs[i])))
+            rnn_input = torch.cat(embs, dim=2)
+            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+                # emb_t is [bsz x 1 x emsize]
+                hidden = self.rnn(emb_t.squeeze(1), hidden)
+                output += [hidden[0]] if self.rnn_type == 'LSTM' else [hidden]
+            output = torch.stack(output, 1)
+            output = self.drop(output)
 
-        decs = []
-        for i in range(self.num_channels):
-            decoded = self.decoders[i](
-                output.view(output.size(0)*output.size(1), output.size(2)))
-            decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-        return decs, hidden
-    '''
+            decs = []
+            for i in range(self.num_channels):
+                decoded = self.decoders[i](
+                    output.view(output.size(0)*output.size(1), output.size(2)))
+                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
+            return decs, hidden
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
