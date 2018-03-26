@@ -331,8 +331,7 @@ def evaluate(eval_data, mb_indices):
         hidden = model.init_hidden(args.batch_size)
     return total_loss[0] / len(mb_indices)
 
-# TODO get rid of the x param
-def train(x):
+def train():
     # Turn on training mode which enables dropout.
     model.train()
     total_loss = 0
@@ -377,8 +376,7 @@ if args.mode == 'train':
         for epoch in range(1, args.epochs+1):
             args.epoch = epoch-1
             epoch_start_time = time.time()
-            x = (epoch == 100)
-            train_loss = train(x) # TODO
+            train_loss = train() 
             val_loss = evaluate(valid_data, valid_mb_indices)
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
