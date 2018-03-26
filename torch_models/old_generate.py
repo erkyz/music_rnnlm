@@ -100,9 +100,8 @@ if args.temperature < 1e-3:
 
 NO_INFO_EVENT_IDX = 3
 
-def generate(model, args, sv):
+def generate(model, args, sv, vanilla_model):
     model.eval()
-    print sv.origs
     for i in range(args.num_out):
         torch.manual_seed(i)
 
