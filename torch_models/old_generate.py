@@ -137,7 +137,7 @@ def generate(model, args, sv):
                 outputs, hidden = model(gen_data, hidden, args)
 
             word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
-            word_idxs = [torch.multinomial(word_weights[c])[0].data[0] for c in range(sv.num_channels)] 
+            word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
             for c in range(sv.num_channels):
                 if t < args.condition_notes+1:
                     generated_events[c].append(sv.i2e[c][events[c][t]])
