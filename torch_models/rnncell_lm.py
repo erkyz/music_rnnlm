@@ -55,24 +55,28 @@ class RNNCellModel(nn.Module):
         batch_size = inputs[0].size(0)
         # linear annealing 
         prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
-         
         decs = [[]*self.num_channels]
+
         tmp = []
         for c in range(self.num_channels):
             tmp.append(self.drop(self.encoders[c](inputs[c][:,0])))
         emb_t = torch.cat(tmp, dim=1)
+
         for t in range(inputs[0].size(1)):
             hidden = self.rnn(emb_t, hidden)
             out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
-            out_t = self.drop(out_t)
             tmp = []
             for c in range(self.num_channels):
                 decoded = self.decoders[c](out_t)
                 decs[c].append(decoded.unsqueeze(1))
-                weights = F.softmax(decoded.data.div(args.temperature)).contiguous()
-                sampled_idxs = torch.multinomial(weights, 1)
-                idx = inputs[c][:,t] if random.random() < prob_gold else sampled_idxs.squeeze()
-                tmp.append(self.drop(self.encoders[c](idx)))
+                if random.random() > prob_gold and t >= args.skip_first_n_note_losses:
+                    d = decoded.data.div(args.temperature)
+                    weights = torch.stack([F.softmax(d[b]) for b in range(batch_size)], 0)
+                    sampled_idxs = torch.multinomial(weights, 1)
+                    idxs = Variable(sampled_idxs.squeeze().data)
+                else:
+                    idxs = inputs[c][:,t]
+                tmp.append(self.drop(self.encoders[c](idxs)))
             emb_t = torch.cat(tmp, dim=1)
 
         for c in range(self.num_channels):
