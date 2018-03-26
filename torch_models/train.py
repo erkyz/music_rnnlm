@@ -18,7 +18,7 @@ import util
 import data
 import rnnlm, rnncell_lm, hrnnlm
 import similarity
-import get_hiddens
+import get_hiddens, old_generate
 
 # event index for padding
 PADDING = 0
@@ -75,7 +75,7 @@ parser.add_argument('--distance_threshold', type=int, default=3,
 parser.add_argument('--most_recent', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
 
-# "Get hiddens" stuff
+# "Get hiddens" / Generate stuff
 parser.add_argument('--max_events', type=int, default='250',
                     help='number of words to generate')
 parser.add_argument('--temperature', type=float, default=1.0,
@@ -84,6 +84,13 @@ parser.add_argument('--condition_piece', type=str, default="",
                     help='midi piece to condition on')
 parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
                     help='model checkpoint to use')
+parser.add_argument('--num_out', type=int, default=5,
+                    help='number of melodies to generate')
+parser.add_argument('--condition_notes', type=int, default=0,
+                    help='number of notes to condition the generation on')
+parser.add_argument('--outf', type=str, default='test',
+                    help='output file for generated text')
+
 
 # Meta-training stuff
 parser.add_argument('--mode', type=str, default='train')
@@ -237,6 +244,7 @@ print "Time elapsed", time.time() - t
 
 args.ntokens = sv.sizes
 vanilla_model = None
+
 if args.mode == 'train':
     if args.arch == "hrnn":
         model = hrnnlm.FactorHRNNModel(args)
@@ -252,7 +260,6 @@ if args.mode == 'train':
         if args.vanilla_ckpt != '':
             with open(args.vanilla_ckpt, 'rb') as f:
                 vanilla_model = torch.load(f)
-                vanilla_model.eval()
         model = rnncell_lm.VineRNNModel(args) 
     else:
         model = rnnlm.RNNModel(args)
@@ -260,10 +267,11 @@ if args.mode == 'train':
     criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-elif args.mode == 'get_hiddens':
+elif args.mode == 'get_hiddens' or args.mode == 'generate':
     args.batch_size = 1
     with open(args.checkpoint, 'rb') as f:
         model = torch.load(f)
+        model.eval()
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
@@ -402,17 +410,10 @@ if args.mode == 'train':
         test_loss, math.exp(test_loss)))
     print('=' * 89)
 
+elif args.mode == 'generate':
+    old_generate.generate(model, args, corpus.vocab)
+
 elif args.mode == 'get_hiddens':
-    model.eval()
-    hidden = model.init_hidden(1)
-    random.shuffle(train_mb_indices)
-    for batch in train_mb_indices:
-        data = get_batch_variables(train_data, batch, evaluation=True)
-        if args.arch == "hrnn":       
-            data["special_event"] = corpus.vocab.special_events['measure'].i
-        _, hidden = model(data, hidden)
-        hidden = repackage_hidden(hidden)
-    
-    get_hiddens.get_hiddens(model, hidden, args, corpus.vocab)
+    get_hiddens.get_hiddens(model, args, corpus.vocab)
 
 

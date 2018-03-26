@@ -90,8 +90,8 @@ if args.temperature < 1e-3:
 
 '''
 
-def get_hiddens(model, h0, args, sv):
-    prev_hs = [h0]
+def get_hiddens(model, args, sv):
+    prev_hs = [model.init_hidden(1)]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
     if args.arch in util.CONDITIONALS:
@@ -101,7 +101,6 @@ def get_hiddens(model, h0, args, sv):
     print zip(events[0], range(len(events[0])))
     # print zip(conditions[0], range(len(conditions[0])))
 
-    hidden = h0
     for t in range(min(args.max_events, len(events[0]))):
         if args.arch in util.CONDITIONALS:
             for c in range(sv.num_channels):
@@ -111,12 +110,12 @@ def get_hiddens(model, h0, args, sv):
             gen_data["data"][c].data.fill_(events[c][t])
 
         if args.arch == "hrnn":
-            outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+            outputs, hidden = model(gen_data, prev_hs[-1], sv.special_events['measure'].i)
         elif args.arch == 'vine' or args.arch == 'xrnn':
             # prev_hs modified in place
-            outputs, hidden = model(gen_data, hidden, prev_hs)
+            outputs, hidden = model(gen_data, prev_hs[-1], args, prev_hs)
         else:
-            outputs, hidden = model(gen_data, hidden)
+            outputs, hidden = model(gen_data, prev_hs[-1], args)
             prev_hs.append(hidden)
 
     print len(prev_hs)
