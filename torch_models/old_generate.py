@@ -7,6 +7,7 @@ import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import data, util, similarity, beam_search, gen_util
 
+'''
 parser = argparse.ArgumentParser()
 
 # Data stuff
@@ -95,75 +96,59 @@ if torch.cuda.is_available():
 
 if args.temperature < 1e-3:
     parser.error("--temperature has to be greater or equal 1e-3")
-
-with open(args.checkpoint, 'rb') as f:
-    model = torch.load(f)
-vanilla_model = None
-if args.vanilla_ckpt != '':
-    with open(args.vanilla_ckpt, 'rb') as f:
-        vanilla_model = torch.load(f)
-print model
-model.eval()
-vanilla_model.eval()
-
-if args.cuda:
-    model.cuda()
-else:
-    model.cpu()
-
-sv, _, _ = util.load_train_vocab(args)
+'''
 
 NO_INFO_EVENT_IDX = 3
 
-for i in range(args.num_out):
-    print ""
-    torch.manual_seed(i)
-    if torch.cuda.is_available():
-        if not args.cuda:
-            print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-        else:
-            torch.cuda.manual_seed(i) 
+def generate(model, args, sv):
+    model.eval()
+    print sv.origs
+    for i in range(args.num_out):
+        torch.manual_seed(i)
 
-    hidden = model.init_hidden(1) 
-    prev_hs = [hidden]
-    gen_data = gen_util.make_data_dict(args, sv)
-    gen_data["cuda"] = args.cuda
-    events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
-    generated_events = [[] * sv.num_channels] # TODO
-
-    for t in range(min(args.max_events, len(conditions[0]))):
+        hidden = model.init_hidden(1) 
+        prev_hs = [hidden]
+        gen_data = gen_util.make_data_dict(args, sv)
+        gen_data["cuda"] = args.cuda
         if args.arch in util.CONDITIONALS:
-            for c in range(sv.num_channels):
-                gen_data["conditions"][c].data.fill_(conditions[c][t])
-
-        for c in range(sv.num_channels):
-            if t < args.condition_notes:
-                gen_data["data"][c].data.fill_(events[c][t])
-            else:
-                gen_data["data"][c].data.fill_(word_idxs[c])
-
-        if args.arch == "hrnn":
-            outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-        elif args.arch == 'vine' or args.arch == 'xrnn':
-            # prev_hs modified in place
-            outputs, hidden = model(gen_data, hidden, prev_hs)
+            events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
         else:
-            outputs, hidden = model(gen_data, hidden)
+            events = gen_util.get_events(sv, args, args.condition_piece)
+        generated_events = [[] * sv.num_channels] # TODO
+        args.epoch = 0
 
-        word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
-        word_idxs = [torch.multinomial(word_weights[c])[0].data[0] for c in range(sv.num_channels)] 
-        for c in range(sv.num_channels):
-            if t < args.condition_notes+1:
-                generated_events[c].append(sv.i2e[c][events[c][t]])
+        for t in range(min(args.max_events, len(events[0]))):
+            if args.arch in util.CONDITIONALS:
+                for c in range(sv.num_channels):
+                    gen_data["conditions"][c].data.fill_(conditions[c][t])
+
+            for c in range(sv.num_channels):
+                if t < args.condition_notes:
+                    gen_data["data"][c].data.fill_(events[c][t])
+                else:
+                    gen_data["data"][c].data.fill_(word_idxs[c])
+
+            if args.arch == "hrnn":
+                outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+            elif args.arch == 'vine' or args.arch == 'xrnn':
+                # prev_hs modified in place
+                outputs, hidden = model(gen_data, hidden, args, prev_hs)
             else:
-                generated_events[c].append(sv.i2e[c][word_idxs[c]])
+                outputs, hidden = model(gen_data, hidden, args)
 
-        if word_idxs[0] == sv.special_events["end"].i:
-            break
+            word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
+            word_idxs = [torch.multinomial(word_weights[c])[0].data[0] for c in range(sv.num_channels)] 
+            for c in range(sv.num_channels):
+                if t < args.condition_notes+1:
+                    generated_events[c].append(sv.i2e[c][events[c][t]])
+                else:
+                    generated_events[c].append(sv.i2e[c][word_idxs[c]])
 
-    print i, zip(
-            [x.i for x in generated_events[0]], conditions[0], range(len(generated_events[0])))
-    sv.events2mid([generated_events[0]], "../../generated/" + args.outf + '_' + str(i) + '.mid')
+            if word_idxs[0] == sv.special_events["end"].i:
+                break
+
+        # print i, zip([x.i for x in generated_events[0]], conditions[0], range(len(generated_events[0])))
+        sv.events2mid([generated_events[0]], "../../generated/" + args.outf + '_' + str(i) + '.mid')
 
 '''
 allHyp, allScores = [], []

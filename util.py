@@ -241,7 +241,7 @@ class PitchDurationVocab(SimpleVocab):
         filenames = getmidfiles(path) 
         for filename in filenames:
             # note that measure token is already included
-            events, _ = clss.mid2orig(filename, include_measure_boundaries=False) 
+            events, _ = clss.mid2orig(filename, include_measure_boundaries=False, channel=0)
             for event in events:
                 v.add_event_to_all(event)
         print "PitchDurationVocab sizes:", v.sizes

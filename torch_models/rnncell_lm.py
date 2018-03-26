@@ -69,7 +69,7 @@ class RNNCellModel(nn.Module):
             for c in range(self.num_channels):
                 decoded = self.decoders[c](out_t)
                 decs[c].append(decoded.unsqueeze(1))
-                weights = F.softmax(decoded.data.div(args.temperature)).contiguous()
+                weights = torch.stack([F.softmax(decoded.data.div(args.temperature)[i]) for i in range(batch_size)], 0) 
                 sampled_idxs = torch.multinomial(weights, 1)
                 idx = inputs[c][:,t] if random.random() < prob_gold else sampled_idxs.squeeze()
                 tmp.append(self.drop(self.encoders[c](idx)))
