@@ -411,7 +411,7 @@ if args.mode == 'train':
     print('=' * 89)
 
 elif args.mode == 'generate':
-    old_generate.generate(model, args, corpus.vocab)
+    old_generate.generate(model, args, corpus.vocab, vanilla_model)
 
 elif args.mode == 'get_hiddens':
     get_hiddens.get_hiddens(model, args, corpus.vocab)

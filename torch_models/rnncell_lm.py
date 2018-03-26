@@ -154,12 +154,64 @@ class XRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 100.0)
+        self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 0.0)
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
+    def forward(self, data, hidden, args, prev_hs=None):
+        sigmoid = nn.Sigmoid()
+        print sigmoid(self.alpha)
+        # linear annealing 
+        prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
+
+        # list of (bsz,seqlen)
+        inputs = data["data"]
+        # data["conditions"] is a list of (bsz,seqlen)
+        conditions = data["conditions"][0].data.tolist() # TODO
+        batch_size = inputs[0].size(0)
+        if prev_hs is None:
+            # Train mode
+            prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+                 
+        decs = [[]*self.num_channels]
+        tmp = []
+        for c in range(self.num_channels):
+            tmp.append(self.drop(self.encoders[c](inputs[c][:,0])))
+        emb_t = torch.cat(tmp, dim=1)
+        for t in range(inputs[0].size(1)):
+            to_concat = []
+            for b in range(batch_size):
+                prev_idx = conditions[b][t] if t > args.skip_first_n_note_losses else -1
+                to_concat.append(
+                    sigmoid(self.alpha)*prev_hs[-1][b].unsqueeze(0)
+                    +(1-sigmoid(self.alpha))*prev_hs[prev_idx][b].unsqueeze(0))
+            new_h_t = torch.cat(to_concat, dim=0)
+            if self.rnn_type == 'LSTM': 
+                hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
+            else:
+                hidden = self.rnn(emb_t.squeeze(1), new_h_t)
+            out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
+            prev_hs.append(out_t)
+            out_t = self.drop(out_t)
+            tmp = []
+            for c in range(self.num_channels):
+                decoded = self.decoders[c](out_t)
+                decs[c].append(decoded.unsqueeze(1))
+                weights = torch.stack([F.softmax(decoded.data.div(args.temperature)[i]) for i in range(batch_size)], 0) 
+                sampled_idxs = torch.multinomial(weights, 1)
+                idx = inputs[c][:,t] if random.random() < prob_gold else sampled_idxs.squeeze()
+                tmp.append(self.drop(self.encoders[c](idx)))
+            emb_t = torch.cat(tmp, dim=1)
+
+        for c in range(self.num_channels):
+            decs[c] = torch.cat(decs[c], dim=1)
+
+        return decs, hidden
+
+
+    """
     def forward(self, data, hidden, args, prev_hs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
@@ -206,6 +258,7 @@ class XRNNModel(nn.Module):
                 output.view(output.size(0)*output.size(1), output.size(2)))
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
         return decs, prev_hs[-1]
+    """
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
