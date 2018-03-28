@@ -48,9 +48,9 @@ def diff(x):
 
 
 pdv = util.PitchDurationVocab()
-melody, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=False)
+melody, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=False, channel=0)
 melody = melody[1:] # remove START
-melody2, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=True)
+melody2, _ = pdv.mid2orig(args.data + args.melody + '.mid', include_measure_boundaries=True, channel=0)
 melody2 = melody2[1:]
 args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, pdv)), similarity.MIN_WINDOW)
 print args.window

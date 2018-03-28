@@ -26,7 +26,8 @@ def get_events_and_conditions(sv, args, vanilla_model):
         if vanilla_model is None:
             melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True, channel=channel)
             args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
-            ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)
+            ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)[0]
+            # TODO ssm is the wrong length here. 
         else:
             events = get_events(sv, args, args.condition_piece)
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, events)
