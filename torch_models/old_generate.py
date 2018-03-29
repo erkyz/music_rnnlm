@@ -73,8 +73,6 @@ parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
-parser.add_argument('--most_recent', action='store_true',
-                    help='whether we repeat the most recent similar or earliest similar')
 
 # Meta-training stuff
 parser.add_argument('--seed', type=int, default=1111,
