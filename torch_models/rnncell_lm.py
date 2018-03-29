@@ -179,8 +179,9 @@ class XRNNModel(nn.Module):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            # prev = prev_hs[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
-            prev = self.default_h
+            # prev = prev_hs[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
+            prev = prev_hs[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
+            # prev = self.default_h
             l = torch.matmul(self.A, prev_hs[-1][b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))

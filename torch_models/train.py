@@ -343,8 +343,9 @@ def train():
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
-    print torch.sum(model.A).data[0]
-    print torch.sum(model.B).data[0]
+    if args.arch == 'xrnn':
+        print torch.sum(model.A).data[0]
+        print torch.sum(model.B).data[0]
     for batch in train_mb_indices:
         data = get_batch_variables(train_data, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
@@ -380,7 +381,7 @@ if args.mode == 'train':
             epoch_start_time = time.time()
             train_loss = train() 
             val_loss = evaluate(valid_data, valid_mb_indices)
-            val_perp = math.exp(val_loss) if val_loss < 1e10 else float('nan')
+            val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
                     'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time), train_loss,
