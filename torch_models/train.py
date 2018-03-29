@@ -75,7 +75,7 @@ parser.add_argument('--c', type=float, default=2,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--distance_threshold', type=int, default=3,
                     help='distance where below, we consider windows sufficiently similar')
-parser.add_argument('--most_recent', action='store_true',
+parser.add_argument('--copy_earliest', action='store_true',
                     help='whether we repeat the most recent similar or earliest similar')
 
 # "Get hiddens" / Generate stuff
@@ -257,6 +257,12 @@ if args.mode == 'train':
                 vanilla_model = torch.load(f)
                 # vanilla_model.eval()
         model = rnncell_lm.XRNNModel(args) 
+    elif args.arch == "prnn":
+        if args.vanilla_ckpt != '':
+            with open(args.vanilla_ckpt, 'rb') as f:
+                vanilla_model = torch.load(f)
+                # vanilla_model.eval()
+        model = rnncell_lm.PRNNModel(args) 
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
     elif args.arch == "vine":
@@ -343,7 +349,7 @@ def train():
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
-    if args.arch == 'xrnn':
+    if args.arch in util.CONDITIONALS:
         print torch.sum(model.A).data[0]
         print torch.sum(model.B).data[0]
     for batch in train_mb_indices:

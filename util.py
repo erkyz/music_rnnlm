@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import events
 
-CONDITIONALS = {'xrnn', 'vine'}
+CONDITIONALS = {'xrnn', 'vine', 'prnn'}
 PADDING_NAME = 'padding'
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'
@@ -43,7 +43,7 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 def get_datadumpf(args, extra=''):
     tmp_prefix = '../tmp/' + args.tmp_prefix
     f = tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
-    if args.most_recent:
+    if not args.copy_earliest:
         f += '_mostrecent'
     if args.arch in CONDITIONALS:
         f += '_condmod'
@@ -59,7 +59,7 @@ def get_datadumpf(args, extra=''):
 def get_savef(args, corpus, extra=''):
     tmp_prefix = '../tmp/' 
     f = tmp_prefix + args.arch + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses) + 'vsize' + str(corpus.vocab.sizes[0]) + 'nh' + str(args.nhid) + 'em' + str(args.emsize)
-    if args.most_recent:
+    if not args.copy_earliest:
         f += '_mostrecent'
     if args.vanilla_ckpt != '':
         f += '_vanilla'

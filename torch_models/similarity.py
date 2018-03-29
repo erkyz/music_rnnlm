@@ -191,7 +191,7 @@ def get_prev_match_idx(ssm, args, sv):
     # scan left to right. simplified for now to only 0's and 1's, so simpler here too.
     for col in range(ssm.shape[0]):
         row_order = range(col)
-        if args.most_recent:
+        if not args.copy_earliest:
             row_order = reversed(row_order)
         for row in row_order:
             if ssm[row][col] == 1:
