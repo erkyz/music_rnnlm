@@ -154,12 +154,11 @@ class XRNNModel(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def init_weights(self):
-        # self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 5.0)
         self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.A)
         self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.B)
-        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid))
+        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
@@ -301,12 +300,11 @@ class PRNNModel(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def init_weights(self):
-        # self.alpha = nn.Parameter(torch.FloatTensor(1).zero_() + 5.0)
         self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.A)
         self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.B)
-        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid))
+        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
@@ -331,10 +329,12 @@ class PRNNModel(nn.Module):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            w = 1
+            '''
+            w = 4
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
             prev = prev_hs[prev_idx+w][b] if use_prev else self.default_h
-            # prev = self.default_h
+            '''
+            prev = self.default_h
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
@@ -384,8 +384,7 @@ class PRNNModel(nn.Module):
                 decoded = self.decoders[i](
                     output.view(output.size(0)*output.size(1), output.size(2)))
                 decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, prev_hs[-1]
-
+            return decs, hidden
 
 
 

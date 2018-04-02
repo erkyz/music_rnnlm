@@ -32,6 +32,7 @@ parser.add_argument('--tmp_prefix', type=str, default="cmaj_nott",
                     help='tmp directory + prefix for tmp files')
 parser.add_argument('--save', type=str, default="",
                     help='override default model save filename')
+parser.add_argument('--use_metaf', action='store_true')
 
 # RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
@@ -85,7 +86,7 @@ parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature - higher will increase diversity')
 parser.add_argument('--condition_piece', type=str, default="",
                     help='midi piece to condition on')
-parser.add_argument('--checkpoint', type=str, default='../tmp/model.pt',
+parser.add_argument('--checkpoint', type=str, default='',
                     help='model checkpoint to use')
 parser.add_argument('--num_out', type=int, default=5,
                     help='number of melodies to generate')
@@ -143,9 +144,11 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
-        if args.vanilla_ckpt == '':
+        if args.use_metaf:
+            ssm = source_slice[b][1]['ssm']
+        elif args.vanilla_ckpt == '':
             melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
-            args.window = source_slice[b][1]
+            args.window = source_slice[b][1] # TODO
             ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=True)
         else:
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
@@ -279,7 +282,8 @@ if args.mode == 'train':
 
 elif args.mode == 'get_hiddens' or args.mode == 'generate':
     args.batch_size = 1
-    with open(args.checkpoint, 'rb') as f:
+    checkpoint = args.checkpoint if args.checkpoint != '' else util.get_savef(args, corpus)
+    with open(checkpoint, 'rb') as f:
         model = torch.load(f)
         model.eval()
     if args.vanilla_ckpt != '':
@@ -412,6 +416,8 @@ if args.mode == 'train':
     with open(args.save if args.save != '' else util.get_savef(args, corpus), 'rb') as f:
         print("Saving model")
         model = torch.load(f)
+
+    print losses["train"]
 
     # Run on test data.
     test_loss = evaluate(test_data, test_mb_indices)

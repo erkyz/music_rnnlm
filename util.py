@@ -1,8 +1,9 @@
 from __future__ import division
-import pickle, midi, math, os
+import pickle, math, os
 import music21
 import numpy as np
 from glob import glob
+import fnmatch
 from collections import defaultdict
 
 import events
@@ -106,8 +107,11 @@ def itersubclasses(cls, _seen=None):
                 yield sub
 
 def getmidfiles(path):
-    return [y for x in os.walk(path) for y in glob(os.path.join(x[0], '*.mid'))]
-
+    matches = []
+    for root, dirnames, filenames in os.walk(path):
+        for filename in fnmatch.filter(filenames, '*.mid'):
+            matches.append(os.path.join(root, filename))
+    return matches
 
 def quantize(event, resolution):
     min_pulse = resolution / NUM_SPLIT
@@ -197,7 +201,7 @@ class SimpleVocab(object):
             v.orig2e = [defaultdict(events.Event.not_found, info_dict["orig2e"][i]) \
                             for i in range(v.num_channels)]
             v.special_events = info_dict["special_events"]
-            print "Vocab sizes:", v.sizes
+            print ("Vocab sizes:", v.sizes)
             return v
 
 
@@ -226,9 +230,9 @@ class PitchDurationVocab(SimpleVocab):
                 if type(e) is music21.note.Note:
                     out.append((e.nameWithOctave, e.duration.quarterLength))
                     measure_progress += e.duration.quarterLength
-		elif type(e) is music21.note.Rest:
-		    out.append((e.name, e.duration.quarterLength))
-            measure_progress += e.duration.quarterLength
+                elif type(e) is music21.note.Rest:
+                    out.append((e.name, e.duration.quarterLength))
+                    measure_progress += e.duration.quarterLength
             break # TODO this break will only work for Nottingham-like MIDI
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
         return out, measure_limit
@@ -244,7 +248,7 @@ class PitchDurationVocab(SimpleVocab):
             events, _ = clss.mid2orig(filename, include_measure_boundaries=False, channel=0)
             for event in events:
                 v.add_event_to_all(event)
-        print "PitchDurationVocab sizes:", v.sizes
+        print ("PitchDurationVocab sizes:", v.sizes)
         v.save(vocab_fname)
         return v
 
@@ -309,7 +313,7 @@ class FactorPitchDurationVocab(SimpleVocab):
                 events, _ = clss.mid2orig(filename, False, channel)
                 for event in events:
                     v.add_event_to_channel(event, channel)
-        print "FactorPitchDurationVocab sizes:", v.sizes
+        print ("FactorPitchDurationVocab sizes:", v.sizes)
         v.save(vocab_fname)
         return v
 
@@ -379,7 +383,7 @@ class FactorPDMVocab(SimpleVocab):
                 events, _ = clss.mid2orig(filename, False, channel)
                 for event in events:
                     v.add_event_to_channel(event, channel)
-        print "FactorPDMVocab sizes:", v.sizes
+        print ("FactorPDMVocab sizes:", v.sizes)
         v.save(vocab_fname)
         return v
 

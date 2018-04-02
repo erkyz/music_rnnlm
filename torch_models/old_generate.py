@@ -104,15 +104,17 @@ def generate(model, args, sv, vanilla_model=None):
         torch.manual_seed(i*args.seed)
 
         hidden = model.init_hidden(1) 
-        prev_hs = [hidden]
+        prev_hs = [hidden["parallel"] if args.arch == 'prnn' else hidden]
         gen_data = gen_util.make_data_dict(args, sv)
         gen_data["cuda"] = args.cuda
         if args.arch in util.CONDITIONALS:
             events, conditions = gen_util.get_events_and_conditions(sv, args, vanilla_model)
+            print conditions
         else:
             events = gen_util.get_events(sv, args, args.condition_piece)
         generated_events = [[] * sv.num_channels] # TODO
         args.epoch = 0
+        word_idxs = [events[c][0] for c in range(sv.num_channels)] 
 
         for t in range(min(args.max_events, len(events[0]))):
             if args.arch in util.CONDITIONALS:
@@ -147,16 +149,4 @@ def generate(model, args, sv, vanilla_model=None):
         # print i, zip([x.i for x in generated_events[0]], conditions[0], range(len(generated_events[0])))
         sv.events2mid([generated_events[0]], "../../generated/" + args.outf + '_' + str(i) + '.mid')
 
-'''
-allHyp, allScores = [], []
-n_best = max(args.beam_size, 1)
-scores, ks = beam.sort_best()
-# allScores += [scores[:n_best]]
-
-for k in range(n_best):
-    hyp = beam.get_hyp(k)
-    events = [[sv.i2e[c][hyp[c][i]] for i in range(len(hyp[c]))] for c in range(len(hyp))]
-    print [[hyp[c][i] for i in range(len(hyp[c]))] for c in range(len(hyp))]
-    sv.events2mid(events, "../../generated/" + args.outf + str(k) + '.mid')
-'''
 

@@ -17,6 +17,7 @@ class Corpus(object):
     def eventize(self, path, args):
         ''' returns a list of lists, where each list is a single channel. '''
         assert os.path.exists(path)
+        meta_dict = pickle.load(open(path + '/meta.p', 'rb'))
 
         nevents = 0
         maxlen = 0
@@ -29,10 +30,12 @@ class Corpus(object):
                     continue
                 melody2, _ = self.vocab.mid2orig(f, include_measure_boundaries=True, channel=c)
                 melody2 = melody2[1:]
+                info_dict = {'ssm': meta_dict[os.path.basename(f)]['ssm']}
                 melodies[c].append(
                     (
                         [self.vocab.orig2e[c][orig].i for orig in melody],
-                        max(int(args.c*similarity.get_avg_dist_between_measures(melody2, self.vocab)), similarity.MIN_WINDOW)
+                        info_dict        
+                        # max(int(args.c*similarity.get_avg_dist_between_measures(melody2, self.vocab)), similarity.MIN_WINDOW)
                     )
                         )
         for c in range(self.vocab.num_channels):

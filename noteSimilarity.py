@@ -13,7 +13,7 @@ parser.add_argument('--melody', type=str, default='jigs_simple_chords_1',
                     help='midi song name')
 parser.add_argument('--distance_threshold', type=int, default=0,
                     help='distance where below, we consider windows sufficiently similar')
-parser.add_argument('--c', type=float, default=2,
+parser.add_argument('--c', type=float, default=1,
                     help='number of measures to base the note-based ED window off of')
 parser.add_argument('--bnw', action='store_true')
 
