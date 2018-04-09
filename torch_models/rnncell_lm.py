@@ -324,17 +324,17 @@ class PRNNModel(nn.Module):
             main_hidden = Variable(weight.new(bsz, self.nhid).zero_())
             parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
-
+    
     def get_new_h_t(self, curr_h, prev_hs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            '''
-            w = 4
+            w = 1
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
             prev = prev_hs[prev_idx+w][b] if use_prev else self.default_h
             '''
             prev = self.default_h
+            '''
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))

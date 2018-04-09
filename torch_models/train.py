@@ -3,7 +3,7 @@ import argparse
 import time
 import math, random
 import torch.nn as nn
-from itertools import compress, count, imap, islice
+from itertools import compress, count, imap, islice, combinations
 from functools import partial
 from operator import eq
 from torch.autograd import Variable
@@ -18,7 +18,7 @@ import util
 import data
 import rnnlm, rnncell_lm, hrnnlm
 import similarity
-import get_hiddens, old_generate
+import get_hiddens, old_generate, gen_util
 
 # event index for padding
 PADDING = 0
@@ -26,7 +26,7 @@ PADDING = 0
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
 # Data stuff
-parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
+parser.add_argument('--path', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--tmp_prefix', type=str, default="cmaj_nott",
                     help='tmp directory + prefix for tmp files')
@@ -144,8 +144,10 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
+        print mel_idxs
         if args.use_metaf:
             ssm = source_slice[b][1]['ssm']
+            print ssm.shape
         elif args.vanilla_ckpt == '':
             melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
             args.window = source_slice[b][1] # TODO
@@ -245,7 +247,7 @@ def get_batch_variables(batches, batch, evaluation=False):
 
 t = time.time()
 sv, vocabf, corpusf = util.load_train_vocab(args)
-corpus = data.Corpus.load_from_corpus(args.data, sv, vocabf, corpusf, args)
+corpus = data.Corpus.load_from_corpus(sv, vocabf, corpusf, args)
 print "Time elapsed", time.time() - t
 
 args.ntokens = sv.sizes
@@ -327,6 +329,48 @@ test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 # Training code
 ###############################################################################
 
+NUM_TO_GENERATE = 10
+
+def evaluate_ssm():
+    path = args.path + 'train/'
+    meta_dicts = util.get_meta_dicts(path)
+    num_generated = 0
+    num_total_repeats = 0
+    total_repeat_ed = 0
+    for songf, info in meta_dicts.items():
+        if num_generated == NUM_TO_GENERATE:
+            break
+        args.condition_piece = path + songf
+        meta_dict = meta_dicts[os.path.basename(songf)]
+
+        conditions = []
+        if args.arch in util.CONDITIONALS:
+            events, conditions = gen_util.get_events_and_conditions(
+                    sv, args, vanilla_model, meta_dict)
+        else:
+            events = gen_util.get_events(sv, args, args.condition_piece)
+
+        generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
+                vanilla_model)
+        gen_measure_sdm = similarity.get_measure_sdm(
+                [e.original for e in generated[1:][:-1]], 
+                meta_dict['segments'], args)
+        repeating_sections = meta_dict['repeating_sections']
+        for repeats in repeating_sections:
+            repeat_tups = list(combinations(repeats, 2))
+            for i,j in repeat_tups:
+                total_repeat_ed += gen_measure_sdm[i,j]
+            num_total_repeats += len(repeat_tups)
+
+        '''
+        gold_measure_ssm = similarity.get_measure_ssm(
+                [e.original for e in [sv.i2e[0][i] for i in events[0]][1:][:-1]], 
+                meta_dict['segments'], args)
+        '''
+        num_generated += 1
+    return total_repeat_ed / num_total_repeats
+
+
 def evaluate(eval_data, mb_indices):
     # Turn on evaluation mode which disables dropout.
     model.eval()
@@ -389,7 +433,10 @@ if args.mode == 'train':
         for epoch in range(1, args.epochs+1):
             args.epoch = epoch-1
             epoch_start_time = time.time()
-            train_loss = train() 
+            train_loss = train()
+            if args.use_metaf:
+                x = evaluate_ssm()
+                print x
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
             print('-' * 89)
@@ -427,7 +474,11 @@ if args.mode == 'train':
     print('=' * 89)
 
 elif args.mode == 'generate':
-    old_generate.generate(model, args, corpus.vocab, vanilla_model)
+    for i in range(args.num_out):
+        torch.manual_seed(i*args.seed)
+        generated = old_generate.generate(model, args, corpus.vocab, vanilla_model, end=True)
+        outf = "../../generated/" + args.outf + '_' + str(i) + '.mid'
+        sv.events2mid(generated, outf)
 
 elif args.mode == 'get_hiddens':
     args.epoch = 0

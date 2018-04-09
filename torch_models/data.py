@@ -17,7 +17,7 @@ class Corpus(object):
     def eventize(self, path, args):
         ''' returns a list of lists, where each list is a single channel. '''
         assert os.path.exists(path)
-        meta_dict = pickle.load(open(path + '/meta.p', 'rb'))
+        meta_dict = util.get_meta_dict(path)
 
         nevents = 0
         maxlen = 0
@@ -25,11 +25,13 @@ class Corpus(object):
         for f in util.getmidfiles(path):
             for c in range(self.vocab.num_channels):
                 melody, _ = self.vocab.mid2orig(f, include_measure_boundaries=args.measure_tokens, channel=c)
-                if len(melody) < 10 or len(melody) > 400:
+                if len(melody) < 8 or len(melody) > 400:
                     print "Skipping", f
                     continue
+                '''
                 melody2, _ = self.vocab.mid2orig(f, include_measure_boundaries=True, channel=c)
                 melody2 = melody2[1:]
+                '''
                 info_dict = {'ssm': meta_dict[os.path.basename(f)]['ssm']}
                 melodies[c].append(
                     (
@@ -66,7 +68,7 @@ class Corpus(object):
         return corpus
 
     @classmethod
-    def load_from_corpus(clss, path, vocab, vocab_fname, corpus_fname, args):
+    def load_from_corpus(clss, vocab, vocab_fname, corpus_fname, args):
         if os.path.isfile(corpus_fname):
             print "Loading existing Corpus", corpus_fname
             return clss.load(corpus_fname)
@@ -75,9 +77,9 @@ class Corpus(object):
         corpus.vocab = vocab
         corpus.vocab_fname = vocab_fname
         corpus.my_fname = corpus_fname
-        corpus.trains = corpus.eventize(os.path.join(path, 'train'), args)
-        corpus.valids = corpus.eventize(os.path.join(path, 'valid'), args)
-        corpus.tests = corpus.eventize(os.path.join(path, 'test'), args)
+        corpus.trains = corpus.eventize(os.path.join(args.path, 'train'), args)
+        corpus.valids = corpus.eventize(os.path.join(args.path, 'valid'), args)
+        corpus.tests = corpus.eventize(os.path.join(args.path, 'test'), args)
 
         print "Saving new Corpus", corpus_fname
         corpus.save()

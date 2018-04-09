@@ -14,7 +14,7 @@ def get_events(sv, args, midf):
             channel_event_idxs[channel].append(idx)
     return channel_event_idxs
 
-def get_events_and_conditions(sv, args, vanilla_model):
+def get_events_and_conditions(sv, args, vanilla_model, meta_dict):
     if args.condition_piece == "":
         return [], []
 
@@ -23,7 +23,9 @@ def get_events_and_conditions(sv, args, vanilla_model):
 
     for channel in range(sv.num_channels):
         origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel)
-        if vanilla_model is None:
+        if args.use_metaf:
+            ssm = meta_dict['ssm']
+        elif vanilla_model is None:
             melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True, channel=channel)
             args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)
             ssm = similarity.get_note_ssm_future(origs[1:], args, bnw=True)[0]

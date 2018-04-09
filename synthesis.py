@@ -6,7 +6,10 @@ import ast
 import music21
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import Counter, defaultdict
+import itertools
 import pickle
+import random
 
 import util
 
@@ -25,7 +28,7 @@ parser.add_argument('--genre', type=str, default='ashover',
            help='(Nottingham-only for now): prefix of song names to sample from.')
 parser.add_argument('--structure_lists', type=str,
                     help='list of (ABA structure_list in a list of 0-indexed ints)')
-parser.add_argument('--num_per_structure_list', type=str, default='[28,8,7]',
+parser.add_argument('--num_per_structure_list', type=str, default='[100,10,10]',
         help='number of samples to generate per type of structure_list')
 parser.add_argument('--measures_per_section', type=int, default=4)
 parser.add_argument('--rm', action='store_true')
@@ -43,104 +46,136 @@ structure_lists = ast.literal_eval(args.structure_lists)
 out_dir = args.out_dir + '/' + args.genre + args.structure_lists + '/'
 if args.rm and os.path.exists(out_dir):
     shutil.rmtree(out_dir)
-if not os.path.exists(out_dir):
-    os.mkdir(out_dir)
-    os.mkdir(out_dir + 'train')
-    os.mkdir(out_dir + 'valid')
-    os.mkdir(out_dir + 'test')
-else:
-    print ("Already done!")
-    exit()
+os.mkdir(out_dir)
+os.mkdir(out_dir + 'train')
+os.mkdir(out_dir + 'valid')
+os.mkdir(out_dir + 'test')
 
+MIN_SECTION_LEN = 4
+num_per_structure_list = ast.literal_eval(args.num_per_structure_list)
 num_sections = max([max(l) for l in structure_lists])+1
+ts_counter = Counter()
+ts_sections = {}
 
-# For each type of structure_list, we create that structure_list for a song. So each sample is a 
-# list of sections.
-samples = []
-
-
-files_read = 0
 for i, d in enumerate(['train', 'valid', 'test']):
-    num_per_structure_list = ast.literal_eval(args.num_per_structure_list)[i]
+    # For each type of structure_list, we create that structure_list for a song. So 
+    # each sample is a list of sections.
+
     for f in glob.glob(args.data + d + '/' + args.genre + "*.mid"):
         score = music21.converter.parse(f)
         time_signature = util.get_ts(score)
-        # TODO what if there aren't clean measure boundaries?? Print and see.
-        limit = args.measures_per_section * time_signature.beatCount * \
-                    time_signature.beatDuration.quarterLength
-        section_num = 0
+        limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         section_progress = 0
         section = []
-        sample = []
         for part in score:
             for e in part:
-                if section_num == num_sections:
-                    break
-                if section_progress >= limit:
-                    sample.append(section)
-                    section_num += 1
+                if section_progress > limit:
+                    assert(False)
+                if section_progress == limit:
+                    if len(section) >= MIN_SECTION_LEN:
+                        ts_sections.setdefault(time_signature, []).append(section)
+                        ts_counter[time_signature] += 1
                     section_progress = 0
                     section = []
-                if type(e) is music21.note.Note:
-                    section.append((e.nameWithOctave, e.duration.quarterLength))
-                    section_progress += e.duration.quarterLength
-                elif type(e) is music21.note.Rest:
-                    section.append((e.name, e.duration.quarterLength))
-                    section_progress += e.duration.quarterLength
+                if type(e) is music21.note.Note or type(e) is music21.note.Rest:
+                    duration = e.duration.quarterLength
+                    name = e.nameWithOctave if type(e) is music21.note.Note else 'rest'
+                    if section_progress + duration > limit:
+                        cut_duration = limit - section_progress
+                        section.append((name, cut_duration))
+                        ts_counter[time_signature] += 1
+                        ts_sections.setdefault(time_signature, []).append(section)
+                        
+                        section = []
+                        section_progress = section_progress + duration - limit
+                        section.append((name, section_progress))
+                    else:
+                        section.append((name, duration))
+                        section_progress += duration 
 
-        if len(sample) == num_sections:
+# get most frequent time signature
+print(ts_counter)
+ts, _ = ts_counter.most_common(1)[0]
+
+for i, d in enumerate(['train', 'valid', 'test']):
+    metas = {}
+    for structure_list in structure_lists:
+        for num_generated in range(num_per_structure_list[i]):
+            '''
+            # pick one of the time signatures
+            i = random.randrange(sum(ts_counter.values()))
+            ts = next(itertools.islice(ts_counter.elements(), i, None))
+            '''
+            sample = []
+            # sample len(structure_list) sections for this time signature
+            for idx in range(len(structure_list)):
+                next_section = random.choice(ts_sections[ts])
+                while idx > 0 and next_section in sample:
+                    next_section = random.choice(ts_sections[ts])
+                sample.append(next_section)
+
             info_dict = {
                     'sample': sample,
-                    'f': f.split('/')[-1],
                     'ts': time_signature,
                     }
-            samples.append(info_dict)
-            files_read += 1
-        if files_read == num_per_structure_list:
-            break
 
-    if files_read < num_per_structure_list:
-        print ("-"*88)
-        print ("Wanted", num_per_structure_list, "but got", files_read)
-        print ("-"*88)
-
-    metas = {}
-
-    for structure_list in structure_lists:
-        for sample in samples:
             score = music21.stream.Stream()
-            score.append(sample['ts'])
+            score.append(ts)
 
             idx_in_mel = 0
-            # Prefix sum, more or less
             sample_starting_idxs = []
+            sample_ending_idxs = []
+            
             # Create MIDI file
+            evs = []
             for i, section_idx in enumerate(structure_list):
                 sample_starting_idxs.append(idx_in_mel)
-                for tup in sample['sample'][section_idx]:
+                sample_ending_idxs.append(idx_in_mel)
+                for tup in sample[section_idx]:
                     if tup[0] == 'rest':
                         ev = music21.note.Rest()
                     else:
                         ev = music21.note.Note(tup[0])
                     ev.quarterLength = tup[1]
                     score.append(ev)
+                    evs.append(ev)
                     idx_in_mel += 1
-            fileNameWithStructure = str(structure_list) + '|' + sample['f']
+            # TODO rename this variable
+            fileNameWithStructure = str(structure_list) + str(num_generated) + '.mid'
             newFileName = out_dir + d + '/' + fileNameWithStructure
             score.write('midi', newFileName)
             sample_len = idx_in_mel
+            sample_ending_idxs = sample_ending_idxs[1:]
+            sample_ending_idxs.append(idx_in_mel)
 
             # Get SSM
-            ssm = np.zeros([sample_len, sample_len])
+            ssm = np.zeros([sample_len+1, sample_len+1])
             idx_in_mel = 0
             for i in range(len(structure_list)):
                 section_idx = structure_list[i]
                 idxs_eq = get_idxs_where_eq(structure_list, section_idx)
-                for j in range(len(sample['sample'][section_idx])):
+                for j in range(len(sample[section_idx])):
                     for eq_idx in idxs_eq:
                         ssm[idx_in_mel, sample_starting_idxs[eq_idx] + j] = 1
                     idx_in_mel += 1
-            metas[fileNameWithStructure] = {'ssm': ssm}
+
+            # Account for START and END
+            x = ssm.shape[0]
+            ssm = np.insert(ssm, 0, 0, axis=0)
+            ssm = np.insert(ssm, 0, 0, axis=1)
+            ssm[0,0] = 1
+            ssm[-1,-1] = 1
+
+            # Create a num_segments x num_segments SSM (1 or 0)
+            indices_of_sections = [[j for j in range(len(structure_list)) if structure_list[j] == i] for i in range(num_sections)]
+            repeating_sections = [x for x in indices_of_sections if len(x) > 1]
+             
+            # Note that segments doesn't include START or END.
+            metas[fileNameWithStructure] = {
+                    'segments': list(zip(sample_starting_idxs, sample_ending_idxs)),
+                    'ssm': ssm, 
+                    'repeating_sections': repeating_sections,
+                    }
 
     with open(out_dir + '/' + d + '/meta.p', 'wb') as f:
         pickle.dump(metas, f, protocol=2)

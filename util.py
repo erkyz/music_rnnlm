@@ -41,6 +41,12 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 
 #### File utils
 
+def get_meta_dicts(path):
+    if os.path.exists(path):
+        return pickle.load(open(path + '/meta.p', 'rb'))
+    else:
+        return {}
+
 def get_datadumpf(args, extra=''):
     tmp_prefix = '../tmp/' + args.tmp_prefix
     f = tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
@@ -78,15 +84,15 @@ def load_train_vocab(args):
         if args.progress_tokens:
             vocabf = tmp_prefix + '_sv_factorized_measuretokens.p'
             corpusf = tmp_prefix + '_corpus_factorized_measuretokens.p'
-            sv = FactorPDMVocab.load_from_corpus(args.data, vocabf)
+            sv = FactorPDMVocab.load_from_corpus(args.path, vocabf)
         else:
             vocabf = tmp_prefix + '_sv_factorized.p'
             corpusf = tmp_prefix + '_corpus_factorized.p'
-            sv = FactorPitchDurationVocab.load_from_corpus(args.data, vocabf)
+            sv = FactorPitchDurationVocab.load_from_corpus(args.path, vocabf)
     else:
         vocabf = tmp_prefix + '_sv.p'
         corpusf = tmp_prefix + '_corpus.p'
-        sv = PitchDurationVocab.load_from_corpus(args.data, vocabf)
+        sv = PitchDurationVocab.load_from_corpus(args.path, vocabf)
 
     return sv, vocabf, corpusf
 
@@ -224,8 +230,9 @@ class PitchDurationVocab(SimpleVocab):
         measure_limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         for part in score:
             for e in part:
-                if measure_progress >= measure_limit and include_measure_boundaries:
-                    out.append((MEASURE_NAME, MEASURE_NAME))
+                if measure_progress >= measure_limit:
+                    if include_measure_boundaries:
+                        out.append((MEASURE_NAME, MEASURE_NAME))
                     measure_progress -= measure_limit
                 if type(e) is music21.note.Note:
                     out.append((e.nameWithOctave, e.duration.quarterLength))
@@ -233,7 +240,10 @@ class PitchDurationVocab(SimpleVocab):
                 elif type(e) is music21.note.Rest:
                     out.append((e.name, e.duration.quarterLength))
                     measure_progress += e.duration.quarterLength
-            break # TODO this break will only work for Nottingham-like MIDI
+            # TODO this break will only work for Nottingham-like MIDI
+            if measure_progress < measure_limit:
+                out.append(('rest', measure_limit - measure_progress))
+            break 
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
         return out, measure_limit
 

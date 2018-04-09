@@ -50,7 +50,8 @@ def edit_distance(src, dst):
             (edit_distance(src, dst[:-1]) + 1)
     ) 
 
-# padding = 0
+
+# padding+misc = 0
 # right before measure = 1
 # right after measure = 2
 # right before rest = 3
@@ -64,7 +65,7 @@ def diff(x):
     if right[0] == 'rest': return (4, right[1])
     if left[0] == 'measure': return (2, right[1])
     if right[0] == 'measure': return (1, right[1])
-    if left[0] == 'padding' or right[0] == 'padding' or left[0] == 'end' or right[0] == 'end': 
+    if left[0] == 'padding' or right[0] == 'padding' or left[0] == 'end' or right[0] == 'end' or left[0] == 'start' or right[0] == 'start': 
         return (0, right[1])
     if pitch.Pitch(left[0]) == pitch.Pitch(right[0]):
         return (5, right[1])
@@ -125,7 +126,6 @@ def get_future_from_past(melody, args):
 # What I'm currently using (other stuff is semi-dead code)
 ######################################################################
 
-
 def get_note_ssm_past(melody, args, bnw=False):
     """ self-distance matrix """
     ''' melody is a PDV melody '''
@@ -158,6 +158,20 @@ def get_note_ssm_future(melody, args, bnw=False):
                 ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1])
 
     return ssm, rawDiffs
+
+
+def get_measure_sdm(melody, segments, args):
+    ''' melody is a PDV melody '''
+    ''' segments is a list of tuples of indices of where segments begin and end'''
+    differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
+    rawDiffs = map(lambda x: x[0], differences)
+    
+    ssm = np.zeros([len(segments), len(segments)]) 
+    for i, (i1, j1) in enumerate(segments):
+        for t, (i2, j2) in enumerate(segments[i:]):
+            j = t + i
+            ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i1:j1], rawDiffs[i2:j2]) 
+    return ssm
 
 
 def get_hid_sim(hiddens, args, bnw=True):
