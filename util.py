@@ -8,7 +8,7 @@ from collections import defaultdict
 
 import events
 
-CONDITIONALS = {'xrnn', 'vine', 'prnn'}
+CONDITIONALS = {'xrnn', 'vine', 'prnn', 'ernn'}
 PADDING_NAME = 'padding'
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'

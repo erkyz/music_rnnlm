@@ -260,27 +260,24 @@ vanilla_model = None
 if args.mode == 'train':
     if args.arch == "hrnn":
         model = hrnnlm.FactorHRNNModel(args)
-    elif args.arch == "xrnn":
-        if args.vanilla_ckpt != '':
-            with open(args.vanilla_ckpt, 'rb') as f:
-                vanilla_model = torch.load(f)
-                # vanilla_model.eval()
-        model = rnncell_lm.XRNNModel(args) 
     elif args.arch == "prnn":
-        if args.vanilla_ckpt != '':
-            with open(args.vanilla_ckpt, 'rb') as f:
-                vanilla_model = torch.load(f)
-                # vanilla_model.eval()
-        model = rnncell_lm.PRNNModel(args) 
+        model = rnncell_lm.PRNNModel(args)
+    elif args.arch == "xrnn":
+        model = rnncell_lm.XRNNModel(args) 
+    elif args.arch == "ernn":
+        model = rnncell_lm.ERNNModel(args) 
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
     elif args.arch == "vine":
-        if args.vanilla_ckpt != '':
-            with open(args.vanilla_ckpt, 'rb') as f:
-                vanilla_model = torch.load(f)
         model = rnncell_lm.VineRNNModel(args) 
     else:
         model = rnnlm.RNNModel(args)
+
+    if args.arch in CONDITIONALS:
+        if args.vanilla_ckpt != '':
+            with open(args.vanilla_ckpt, 'rb') as f:
+                vanilla_model = torch.load(f)
+                # vanilla_model.eval()
 
     sigmoid = nn.Sigmoid()
     criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
@@ -333,7 +330,7 @@ test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 # Training code
 ###############################################################################
 
-NUM_TO_GENERATE = 10
+NUM_TO_GENERATE = 30
 
 def evaluate_ssm():
     path = args.path + 'train/'
