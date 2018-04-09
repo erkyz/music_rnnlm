@@ -89,6 +89,10 @@ def load_train_vocab(args):
             vocabf = tmp_prefix + '_sv_factorized.p'
             corpusf = tmp_prefix + '_corpus_factorized.p'
             sv = FactorPitchDurationVocab.load_from_corpus(args.path, vocabf)
+    elif args.use_metaf:
+        vocabf = tmp_prefix + '_sv.p'
+        corpusf = tmp_prefix + '_corpus.p'
+        sv = PitchDurationVocab.load_from_pickle(args.path, vocabf)
     else:
         vocabf = tmp_prefix + '_sv.p'
         corpusf = tmp_prefix + '_corpus.p'
@@ -240,12 +244,27 @@ class PitchDurationVocab(SimpleVocab):
                 elif type(e) is music21.note.Rest:
                     out.append((e.name, e.duration.quarterLength))
                     measure_progress += e.duration.quarterLength
-            # TODO this break will only work for Nottingham-like MIDI
             if measure_progress < measure_limit:
                 out.append(('rest', measure_limit - measure_progress))
             break 
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
         return out, measure_limit
+
+    @classmethod
+    def load_from_pickle(clss, path, vocab_fname):
+        if os.path.isfile(vocab_fname):
+            return clss.load(vocab_fname)
+        v = clss()
+        # note that measure token is already included
+        for d in ['train', 'valid', 'test']:
+            for _, meta_dict in pickle.load(open(path + d + '/meta.p', 'rt')).iteritems():
+                events = meta_dict['origs']
+                for name, duration in events:
+                    v.add_event_to_all((str(name), duration))
+        print ("PitchDurationVocab sizes:", v.sizes)
+        v.save(vocab_fname)
+        return v
+
 
     @classmethod
     def load_from_corpus(clss, path, vocab_fname):

@@ -38,6 +38,14 @@ args = parser.parse_args()
 def get_idxs_where_eq(l, x):
     return [j for j in range(len(l)) if l[j] == x]
 
+def add_to_section(section, name, duration):
+    if len(section) > 0 and section[-1][0] == 'rest' and name == 'rest':
+        prev_rest_dur = section[-1][1]
+        section = section[:-1]
+        section.append((name, duration+prev_rest_dur))
+    else:
+        section.append((name, duration))
+    return section 
 
 # The types of structure_list we want in our synthesized dataset. 
 # Each type will have an equal number of examples generated.
@@ -82,15 +90,15 @@ for i, d in enumerate(['train', 'valid', 'test']):
                     name = e.nameWithOctave if type(e) is music21.note.Note else 'rest'
                     if section_progress + duration > limit:
                         cut_duration = limit - section_progress
-                        section.append((name, cut_duration))
+                        add_to_section(section, name, cut_duration)
                         ts_counter[time_signature] += 1
                         ts_sections.setdefault(time_signature, []).append(section)
                         
                         section = []
                         section_progress = section_progress + duration - limit
-                        section.append((name, section_progress))
+                        add_to_section(section, name, section_progress)
                     else:
-                        section.append((name, duration))
+                        add_to_section(section, name, duration)
                         section_progress += duration 
 
 # get most frequent time signature
@@ -125,9 +133,10 @@ for i, d in enumerate(['train', 'valid', 'test']):
             idx_in_mel = 0
             sample_starting_idxs = []
             sample_ending_idxs = []
-            
-            # Create MIDI file
+           
+            # Create MIDI and intermeidate events 
             evs = []
+            origs = []
             for i, section_idx in enumerate(structure_list):
                 sample_starting_idxs.append(idx_in_mel)
                 sample_ending_idxs.append(idx_in_mel)
@@ -137,6 +146,7 @@ for i, d in enumerate(['train', 'valid', 'test']):
                     else:
                         ev = music21.note.Note(tup[0])
                     ev.quarterLength = tup[1]
+                    origs.append(tup)
                     score.append(ev)
                     evs.append(ev)
                     idx_in_mel += 1
@@ -172,9 +182,11 @@ for i, d in enumerate(['train', 'valid', 'test']):
              
             # Note that segments doesn't include START or END.
             metas[fileNameWithStructure] = {
+                    'origs': origs,
                     'segments': list(zip(sample_starting_idxs, sample_ending_idxs)),
                     'ssm': ssm, 
                     'repeating_sections': repeating_sections,
+                    'ts': ts,
                     }
 
     with open(out_dir + '/' + d + '/meta.p', 'wb') as f:

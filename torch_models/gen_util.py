@@ -8,7 +8,7 @@ import similarity, util
 def get_events(sv, args, midf):
     channel_event_idxs = [[] for _ in range(sv.num_channels)]
     for channel in range(sv.num_channels):
-        origs, _ = sv.mid2orig(midf, include_measure_boundaries=args.measure_tokens, channel=channel)
+        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel) if not args.use_metaf else ([sv.special_events['start']] + meta_dict['origs'] + [sv.special_events['end']], 0)
         mel_idxs = [sv.orig2e[channel][o].i for o in origs]
         for idx in mel_idxs:
             channel_event_idxs[channel].append(idx)
@@ -22,7 +22,7 @@ def get_events_and_conditions(sv, args, vanilla_model, meta_dict):
     channel_conditions = [[] for _ in range(sv.num_channels)]
 
     for channel in range(sv.num_channels):
-        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel)
+        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel) if not args.use_metaf else ([sv.special_events['start'].original] + meta_dict['origs'] + [sv.special_events['end'].original], 0)
         if args.use_metaf:
             ssm = meta_dict['ssm']
         elif vanilla_model is None:

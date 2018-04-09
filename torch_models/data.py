@@ -17,29 +17,29 @@ class Corpus(object):
     def eventize(self, path, args):
         ''' returns a list of lists, where each list is a single channel. '''
         assert os.path.exists(path)
-        meta_dict = util.get_meta_dict(path)
+        meta_dicts = util.get_meta_dicts(path)
 
         nevents = 0
         maxlen = 0
-        melodies = [[] for _ in range(self.vocab.num_channels)]
-        for f in util.getmidfiles(path):
-            for c in range(self.vocab.num_channels):
-                melody, _ = self.vocab.mid2orig(f, include_measure_boundaries=args.measure_tokens, channel=c)
-                if len(melody) < 8 or len(melody) > 400:
-                    print "Skipping", f
-                    continue
-                '''
-                melody2, _ = self.vocab.mid2orig(f, include_measure_boundaries=True, channel=c)
-                melody2 = melody2[1:]
-                '''
-                info_dict = {'ssm': meta_dict[os.path.basename(f)]['ssm']}
-                melodies[c].append(
-                    (
-                        [self.vocab.orig2e[c][orig].i for orig in melody],
-                        info_dict        
-                        # max(int(args.c*similarity.get_avg_dist_between_measures(melody2, self.vocab)), similarity.MIN_WINDOW)
-                    )
+        if args.use_metaf:
+            melodies = [[([1] + [self.vocab.orig2e[0][(str(n),d)].i for n, d in meta_dict['origs']] + [2],
+                            meta_dict) for _, meta_dict in meta_dicts.iteritems()]]
+        else:
+            melodies = [[] for _ in range(self.vocab.num_channels)]
+            for f in util.getmidfiles(path):
+                for c in range(self.vocab.num_channels):
+                    melody, _ = self.vocab.mid2orig(f, include_measure_boundaries=args.measure_tokens, channel=c)
+                    if len(melody) < 8 or len(melody) > 400:
+                        print "Skipping", f
+                        continue
+                    meta_dict = meta_dicts[os.path.basename(f)]
+                    meta_dict['f'] = f
+                    melodies[c].append(
+                        (
+                            [self.vocab.orig2e[c][orig].i for orig in melody],
+                            meta_dict        
                         )
+                            )
         for c in range(self.vocab.num_channels):
             melodies[c].sort(key=lambda x: -len(x[0]))
         return melodies
@@ -84,6 +84,5 @@ class Corpus(object):
         print "Saving new Corpus", corpus_fname
         corpus.save()
         return corpus
-
 
 

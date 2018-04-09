@@ -144,10 +144,14 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
-        print mel_idxs
+        print mel_idxs, len(mel_idxs)
         if args.use_metaf:
             ssm = source_slice[b][1]['ssm']
-            print ssm.shape
+            print source_slice[b][1]['segments']
+            print source_slice[b][1]['origs']
+            # print source_slice[b][1]['f']
+            # print ssm
+            print maxlen
         elif args.vanilla_ckpt == '':
             melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
             args.window = source_slice[b][1] # TODO
