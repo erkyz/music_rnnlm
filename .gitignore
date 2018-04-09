@@ -1,7 +1,6 @@
 *slurm*
 *.pyc
 *.pt
-*.p
 .DS_Store
 *.swp
 *.swo
