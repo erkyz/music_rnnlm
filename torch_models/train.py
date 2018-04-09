@@ -287,8 +287,8 @@ if args.mode == 'train':
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 elif args.mode == 'get_hiddens' or args.mode == 'generate':
-    args.batch_size = 1
     checkpoint = args.checkpoint if args.checkpoint != '' else util.get_savef(args, corpus)
+    args.batch_size = 1
     with open(checkpoint, 'rb') as f:
         model = torch.load(f)
         model.eval()
@@ -453,6 +453,7 @@ if args.mode == 'train':
             pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
+                print args.save if args.save != '' else util.get_savef(args, corpus)
                 with open(args.save if args.save != '' else util.get_savef(args, corpus), 'wb') as f:
                     torch.save(model, f)
                 best_val_loss = val_loss
@@ -480,9 +481,21 @@ if args.mode == 'train':
 elif args.mode == 'generate':
     for i in range(args.num_out):
         torch.manual_seed(i*args.seed)
-        generated = old_generate.generate(model, args, corpus.vocab, vanilla_model, end=True)
+        path = args.path + 'train/'
+        meta_dicts = util.get_meta_dicts(path)
+        meta_dict = meta_dicts[os.path.basename(args.condition_piece)]
+
+        conditions = []
+        if args.arch in util.CONDITIONALS:
+            events, conditions = gen_util.get_events_and_conditions(
+                    sv, args, vanilla_model, meta_dict)
+        else:
+            events = gen_util.get_events(sv, args, args.condition_piece)
+
+        generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
+                vanilla_model, end=True)
         outf = "../../generated/" + args.outf + '_' + str(i) + '.mid'
-        sv.events2mid(generated, outf)
+        sv.events2mid([generated], outf)
 
 elif args.mode == 'get_hiddens':
     args.epoch = 0
