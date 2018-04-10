@@ -329,20 +329,22 @@ class ERNNModel(nn.Module):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            w = 0 # TODO check for OBO
+            w = 1 # TODO check for OBO
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-            prev = prev_hs[prev_idx+w][b] if use_prev else self.default_enc
+            prev = prev_hs[b][prev_idx+w] if use_prev else self.default_enc
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
+    '''
     def encode_batch_t(self, inputs, t): 
         batch_size = inputs[0].size(0)
         to_concat = [] 
         for b in range(batch_size):
             to_concat.append(self.prev_encoders[0](inputs[0][b][0]))
         return torch.cat(to_concat, dim=0)
+    '''
 
     # TODO implement this for ERNN
     def forward_ss(self, data, hidden, args, prev_hs=None):
@@ -350,6 +352,7 @@ class ERNNModel(nn.Module):
 
     def forward(self, data, hidden, args, prev_hs=None):
         # hidden is a dict
+        # what we call "prev_hs" is not actually previous hidden states.
         if args.ss:
             return self.forward_ss(data, hidden, args, prev_hs)
         else:
@@ -357,17 +360,18 @@ class ERNNModel(nn.Module):
             inputs = data["data"]
             # data["conditions"] is a list of (bsz,seqlen)
             conditions = data["conditions"][0].data.tolist() # TODO
-            print inputs[0][0], conditions[0]
-            print "-"*88
+            # print inputs[0][0], conditions[0]
+            # print "-"*88
             output = []
             batch_size = inputs[0].size(0)
             embs = []
             for c in range(self.num_channels):
                 embs.append(self.drop(self.encoders[c](inputs[c])))
+            prev_embs = self.prev_encoders[0](inputs[0])
             rnn_input = torch.cat(embs, dim=2)
             if prev_hs is None:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prev_hs = []
+                prev_hs = prev_embs
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 main_h = hidden
                 curr_main_h = main_h[0] if self.is_lstm() else main_h
@@ -376,7 +380,7 @@ class ERNNModel(nn.Module):
                     hidden = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
                 else:
                     hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                prev_hs.append(self.encode_batch_t(inputs, t+1))
+                # prev_hs.append(self.encode_batch_t(inputs, t+1))
                 output += [hidden[0] if self.is_lstm() else hidden]
             output = torch.stack(output, 1)
             output = self.drop(output)
