@@ -273,7 +273,7 @@ if args.mode == 'train':
     else:
         model = rnnlm.RNNModel(args)
 
-    if args.arch in CONDITIONALS:
+    if args.arch in util.CONDITIONALS:
         if args.vanilla_ckpt != '':
             with open(args.vanilla_ckpt, 'rb') as f:
                 vanilla_model = torch.load(f)
@@ -450,7 +450,6 @@ if args.mode == 'train':
             pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
-                print args.save if args.save != '' else util.get_savef(args, corpus)
                 with open(args.save if args.save != '' else util.get_savef(args, corpus), 'wb') as f:
                     torch.save(model, f)
                 best_val_loss = val_loss

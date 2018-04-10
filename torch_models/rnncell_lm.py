@@ -274,6 +274,7 @@ class XRNNModel(nn.Module):
 
 class ERNNModel(nn.Module):
     def __init__(self, args):
+        # Note: emsize of prev_encoder is just nhid for now.
         super(ERNNModel, self).__init__()
         nhid = args.nhid
         nlayers = args.nlayers
@@ -285,13 +286,13 @@ class ERNNModel(nn.Module):
         self.nhid = nhid # output dimension
         for i in range(self.num_channels):
             self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+            self.add_module('prev_encoder_' + str(i), nn.Embedding(ntokens[i], self.nhid)) 
         self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
-        self.parallel_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         self.encoders = AttrProxy(self, 'encoder_') 
+        self.prev_encoders = AttrProxy(self, 'prev_encoder_') 
         self.decoders = AttrProxy(self, 'decoder_') 
 
         self.init_weights()
@@ -305,9 +306,10 @@ class ERNNModel(nn.Module):
         nn.init.xavier_normal(self.A)
         self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.B)
-        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
+        self.default_enc = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[i].weight.data)
+            nn.init.xavier_normal(self.prev_encoders[i].weight.data)
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
@@ -316,33 +318,33 @@ class ERNNModel(nn.Module):
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
-        if self.is_lstm():
-            main_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
-            parallel_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
+        if self.rnn_type == 'LSTM':
+            return (Variable(weight.new(bsz, self.nhid).zero_()),
+                    Variable(weight.new(bsz, self.nhid).zero_()))
         else:
-            main_hidden = Variable(weight.new(bsz, self.nhid).zero_())
-            parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
+            return Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
     
     def get_new_h_t(self, curr_h, prev_hs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            '''
-            w = 1
+            w = 0 # TODO check for OBO
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-            prev = prev_hs[prev_idx+w][b] if use_prev else self.default_h
-            '''
-            prev = self.default_h
+            prev = prev_hs[prev_idx+w][b] if use_prev else self.default_enc
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
+    def encode_batch_t(self, inputs, t): 
+        batch_size = inputs[0].size(0)
+        to_concat = [] 
+        for b in range(batch_size):
+            to_concat.append(self.prev_encoders[0](inputs[0][b][0]))
+        return torch.cat(to_concat, dim=0)
 
-    # TODO implement this for PRNN
+    # TODO implement this for ERNN
     def forward_ss(self, data, hidden, args, prev_hs=None):
          return 
 
@@ -355,6 +357,8 @@ class ERNNModel(nn.Module):
             inputs = data["data"]
             # data["conditions"] is a list of (bsz,seqlen)
             conditions = data["conditions"][0].data.tolist() # TODO
+            print inputs[0][0], conditions[0]
+            print "-"*88
             output = []
             batch_size = inputs[0].size(0)
             embs = []
@@ -362,21 +366,18 @@ class ERNNModel(nn.Module):
                 embs.append(self.drop(self.encoders[c](inputs[c])))
             rnn_input = torch.cat(embs, dim=2)
             if prev_hs is None:
-                # Train mode
-                prev_hs = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
+                # Train mode. Need to save this as a list because of generate-mode.
+                prev_hs = []
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                main_h = hidden["main"]
-                parallel_h = hidden["parallel"]
+                main_h = hidden
                 curr_main_h = main_h[0] if self.is_lstm() else main_h
                 new_h_t = self.get_new_h_t(curr_main_h, prev_hs, conditions, batch_size, t, args)
                 if self.is_lstm():
-                    hidden["main"] = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
-                    hidden["parallel"] = self.parallel_rnn(emb_t.squeeze(1), parallel_h)
+                    hidden = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
                 else:
-                    hidden["main"] = self.rnn(emb_t.squeeze(1), new_h_t)
-                    hidden["parallel"] = self.rnn(emb_t.squeeze(1), parallel_h)
-                prev_hs.append(parallel_h[0] if self.is_lstm() else parallel_h)
-                output += [hidden["main"][0] if self.is_lstm() else hidden["main"]]
+                    hidden = self.rnn(emb_t.squeeze(1), new_h_t)
+                prev_hs.append(self.encode_batch_t(inputs, t+1))
+                output += [hidden[0] if self.is_lstm() else hidden]
             output = torch.stack(output, 1)
             output = self.drop(output)
 
@@ -386,8 +387,6 @@ class ERNNModel(nn.Module):
                     output.view(output.size(0)*output.size(1), output.size(2)))
                 decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
             return decs, hidden
-
-
 
 
 
@@ -438,9 +437,9 @@ class PRNNModel(nn.Module):
         weight = next(self.parameters()).data
         if self.is_lstm():
             main_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
+                    Variable(weight.new(bsz, self.nhid).zero_()))
             parallel_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
+                    Variable(weight.new(bsz, self.nhid).zero_()))
         else:
             main_hidden = Variable(weight.new(bsz, self.nhid).zero_())
             parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
