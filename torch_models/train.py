@@ -297,6 +297,7 @@ elif args.mode == 'get_hiddens' or args.mode == 'generate':
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
+            vanilla_model.eval()
 else:
     print "Mode not supported."
     sys.exit()
