@@ -22,7 +22,7 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
         prevs = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
-    generated_events = [[] * sv.num_channels] # TODO
+    generated_events = [[sv.i2e[c][events[c][0]]] for c in range(sv.num_channels)]
     args.epoch = 0
     # Always start the generation with START
     word_idxs = [events[c][0] for c in range(sv.num_channels)] 
@@ -49,7 +49,8 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
         word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
         word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
         for c in range(sv.num_channels):
-            if t < args.condition_notes+1:
+            if t < args.condition_notes:
+                # Always include START as the first generated token
                 generated_events[c].append(sv.i2e[c][events[c][t]])
             else:
                 generated_events[c].append(sv.i2e[c][word_idxs[c]])
