@@ -24,8 +24,9 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
     gen_data["cuda"] = args.cuda
     generated_events = [[] * sv.num_channels] # TODO
     args.epoch = 0
+    # Always start the generation with START
     word_idxs = [events[c][0] for c in range(sv.num_channels)] 
-
+     
     for t in range(min(args.max_events, len(events[0]))):
         if args.arch in util.CONDITIONALS:
             for c in range(sv.num_channels):

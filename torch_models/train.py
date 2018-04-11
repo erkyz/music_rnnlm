@@ -336,17 +336,16 @@ test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 # Training code
 ###############################################################################
 
-NUM_TO_GENERATE = 30
+NUM_TO_GENERATE = 50
 
 def evaluate_ssm():
+    # Turn on evaluation mode which disables dropout.
+    model.eval()
     path = args.path + 'train/'
     meta_dicts = util.get_meta_dicts(path)
-    num_generated = 0
     num_total_repeats = 0
     total_repeat_ed = 0
-    for songf, info in meta_dicts.items():
-        if num_generated == NUM_TO_GENERATE:
-            break
+    for songf, info in random.sample(meta_dicts.items(), NUM_TO_GENERATE):
         args.condition_piece = path + songf
         meta_dict = meta_dicts[os.path.basename(songf)]
 
@@ -374,7 +373,6 @@ def evaluate_ssm():
                 [e.original for e in [sv.i2e[0][i] for i in events[0]][1:][:-1]], 
                 meta_dict['segments'], args)
         '''
-        num_generated += 1
     return total_repeat_ed / num_total_repeats
 
 
@@ -435,7 +433,7 @@ best_val_loss = None
 losses = {'train': [], 'valid': []}
 train_outf = open(args.train_info_out, 'wb')
 writer = csv.writer(train_outf, delimiter=',')
-writer.writerow(['train_loss','val_loss','gen_ED')
+writer.writerow(['train_loss','val_loss','gen_ED'])
 
 if args.mode == 'train':
     # At any point you can hit Ctrl + C to break out of training early.
