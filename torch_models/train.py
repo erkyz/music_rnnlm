@@ -2,6 +2,7 @@ import torch
 import argparse
 import time
 import math, random
+import csv
 import torch.nn as nn
 from itertools import compress, count, imap, islice, combinations
 from functools import partial
@@ -32,6 +33,8 @@ parser.add_argument('--tmp_prefix', type=str, default="cmaj_nott",
                     help='tmp directory + prefix for tmp files')
 parser.add_argument('--save', type=str, default="",
                     help='override default model save filename')
+parser.add_argument('--train_info_out', type=str, default="test.csv",
+                    help='where to save train info')
 parser.add_argument('--use_metaf', action='store_true')
 
 # RNN params
@@ -427,6 +430,9 @@ def train():
 lr = args.lr
 best_val_loss = None
 losses = {'train': [], 'valid': []}
+train_outf = open(args.train_info_out, 'wb')
+writer = csv.writer(train_outf, delimiter=',')
+writer.writerow(['train_loss','val_loss','gen_ED')
 
 if args.mode == 'train':
     # At any point you can hit Ctrl + C to break out of training early.
@@ -436,8 +442,8 @@ if args.mode == 'train':
             epoch_start_time = time.time()
             train_loss = train()
             if args.use_metaf:
-                x = evaluate_ssm()
-                print x
+                gen_ED = evaluate_ssm()
+                print gen_ED
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
             print('-' * 89)
@@ -447,6 +453,7 @@ if args.mode == 'train':
             print('-' * 89)
             losses["train"].append(train_loss)
             losses["valid"].append(val_loss)
+            writer.writerow([train_loss,val_loss,gen_ED])
             pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
@@ -457,6 +464,7 @@ if args.mode == 'train':
                 # Anneal the learning rate if no improvement has been seen in the validation dataset.
                 lr /= 4.0
     except KeyboardInterrupt:
+        train_outf.close()
         print('-' * 89)
         print('Exiting from training early')
 
@@ -465,14 +473,13 @@ if args.mode == 'train':
         print("Saving model")
         model = torch.load(f)
 
-    print losses["train"]
-
     # Run on test data.
     test_loss = evaluate(test_data, test_mb_indices)
     print('=' * 89)
     print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
         test_loss, math.exp(test_loss)))
     print('=' * 89)
+    train_outf.close()
 
 elif args.mode == 'generate':
     for i in range(args.num_out):
