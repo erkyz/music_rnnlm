@@ -60,6 +60,8 @@ parser.add_argument('--factorize', action='store_true',
                     help='whether to factorize embeddings')
 parser.add_argument('--ss', action='store_true',
                     help='scheduled sampling')
+parser.add_argument('--baseline', action='store_true',
+                    help='use baseline version of model')
 
 
 # Stuff for measure splitting
@@ -298,6 +300,7 @@ else:
 
 print model
 
+
 if args.cuda:
     model.cuda()
 else:
@@ -464,8 +467,6 @@ if args.mode == 'train':
     with open(args.save if args.save != '' else util.get_savef(args, corpus), 'rb') as f:
         print("Saving model")
         model = torch.load(f)
-
-    print losses["train"]
 
     # Run on test data.
     test_loss = evaluate(test_data, test_mb_indices)

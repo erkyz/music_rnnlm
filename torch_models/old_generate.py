@@ -13,8 +13,13 @@ NO_INFO_EVENT_IDX = 3
 
 def generate(model, events, conditions, args, sv, vanilla_model=None, end=False):
     model.eval()
-    hidden = model.init_hidden(1) 
-    prev_hs = [hidden["parallel"] if args.arch == 'prnn' else hidden]
+    hidden = model.init_hidden(1)
+    if args.arch == 'prnn':
+        prevs = [hidden["parallel"]]
+    elif args.arch == 'ernn':
+        prevs = []
+    else: # XRNN
+        prevs = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["cuda"] = args.cuda
     generated_events = [[] * sv.num_channels] # TODO
@@ -34,9 +39,9 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
 
         if args.arch == "hrnn":
             outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-        elif args.arch == 'vine' or args.arch == 'xrnn':
-            # prev_hs modified in place
-            outputs, hidden = model(gen_data, hidden, args, prev_hs)
+        elif args.arch in util.CONDITIONALS:
+            # prevs modified in place
+            outputs, hidden = model(gen_data, hidden, args, prevs)
         else:
             outputs, hidden = model(gen_data, hidden, args)
 

@@ -172,20 +172,20 @@ class XRNNModel(nn.Module):
         else:
             return Variable(weight.new(bsz, self.nhid).zero_())
 
-    def get_new_h_t(self, prev_hs, conditions, batch_size, t, args):
+    def get_new_h_t(self, prevs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            # prev = prev_hs[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
-            prev = prev_hs[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
+            # prev = prevs[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
+            prev = prevs[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
             # prev = self.default_h
-            l = torch.matmul(self.A, prev_hs[-1][b])
+            l = torch.matmul(self.A, prevs[-1][b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
 
-    def forward_ss(self, data, hidden, args, prev_hs=None):
+    def forward_ss(self, data, hidden, args, prevs=None):
         # linear annealing 
         prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
 
@@ -194,9 +194,9 @@ class XRNNModel(nn.Module):
         # data["conditions"] is a list of (bsz,seqlen)
         conditions = data["conditions"][0].data.tolist() # TODO
         batch_size = inputs[0].size(0)
-        if prev_hs is None:
+        if prevs is None:
             # Train mode
-            prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+            prevs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
                  
         decs = [[]*self.num_channels]
         tmp = []
@@ -204,13 +204,13 @@ class XRNNModel(nn.Module):
             tmp.append(self.drop(self.encoders[c](inputs[c][:,0])))
         emb_t = torch.cat(tmp, dim=1)
         for t in range(inputs[0].size(1)):
-            new_h_t = self.get_new_h_t(prev_hs, conditions, batch_size, t, args)
+            new_h_t = self.get_new_h_t(prevs, conditions, batch_size, t, args)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
             else:
                 hidden = self.rnn(emb_t.squeeze(1), new_h_t)
             out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
-            prev_hs.append(out_t)
+            prevs.append(out_t)
             out_t = self.drop(out_t)
             tmp = []
             for c in range(self.num_channels):
@@ -228,14 +228,14 @@ class XRNNModel(nn.Module):
         return decs, hidden
 
 
-    def forward(self, data, hidden, args, prev_hs=None):
+    def forward(self, data, hidden, args, prevs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
         ''' returns a list of outputs for each channel '''
         # print self.default_h
         if args.ss:
-            return self.forward_ss(data, hidden, args, prev_hs)
+            return self.forward_ss(data, hidden, args, prevs)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -247,17 +247,17 @@ class XRNNModel(nn.Module):
             for c in range(self.num_channels):
                 embs.append(self.drop(self.encoders[c](inputs[c])))
             rnn_input = torch.cat(embs, dim=2)
-            if prev_hs is None:
+            if prevs is None:
                 # Train mode
-                prev_hs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+                prevs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                new_h_t = self.get_new_h_t(prev_hs, conditions, batch_size, t, args)
+                new_h_t = self.get_new_h_t(prevs, conditions, batch_size, t, args)
                 if self.rnn_type == 'LSTM': 
                     hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
                 else:
                     hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                prev_hs.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
-                output += [prev_hs[-1]]
+                prevs.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
+                output += [prevs[-1]]
             output = torch.stack(output, 1)
             output = self.drop(output)
 
@@ -266,7 +266,7 @@ class XRNNModel(nn.Module):
                 decoded = self.decoders[i](
                     output.view(output.size(0)*output.size(1), output.size(2)))
                 decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, prev_hs[-1]
+            return decs, prevs[-1]
 
 
 
@@ -325,36 +325,34 @@ class ERNNModel(nn.Module):
             return Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
     
-    def get_new_h_t(self, curr_h, prev_hs, conditions, batch_size, t, args):
+    def get_new_h_t(self, curr_h, prevs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            w = 1 # TODO check for OBO
+            w = 1 
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-            prev = prev_hs[b][prev_idx+w] if use_prev else self.default_enc
+            prev = prevs[prev_idx+w][b] if use_prev else self.default_enc
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
-    '''
     def encode_batch_t(self, inputs, t): 
         batch_size = inputs[0].size(0)
         to_concat = [] 
         for b in range(batch_size):
-            to_concat.append(self.prev_encoders[0](inputs[0][b][0]))
+            to_concat.append(self.prev_encoders[0](inputs[0][b][t]))
         return torch.cat(to_concat, dim=0)
-    '''
 
     # TODO implement this for ERNN
-    def forward_ss(self, data, hidden, args, prev_hs=None):
+    def forward_ss(self, data, hidden, args, prevs=None):
          return 
 
-    def forward(self, data, hidden, args, prev_hs=None):
+    def forward(self, data, hidden, args, prevs=None):
         # hidden is a dict
-        # what we call "prev_hs" is not actually previous hidden states.
+        # what we call "prevs" is not actually previous hidden states.
         if args.ss:
-            return self.forward_ss(data, hidden, args, prev_hs)
+            return self.forward_ss(data, hidden, args, prevs)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -367,20 +365,20 @@ class ERNNModel(nn.Module):
             embs = []
             for c in range(self.num_channels):
                 embs.append(self.drop(self.encoders[c](inputs[c])))
-            prev_embs = self.prev_encoders[0](inputs[0])
             rnn_input = torch.cat(embs, dim=2)
-            if prev_hs is None:
+            if prevs is None:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prev_hs = prev_embs
+                prevs = []
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+                # Encoding is based on inputs, not outputs.
+                prevs.append(self.encode_batch_t(inputs, t))
                 main_h = hidden
                 curr_main_h = main_h[0] if self.is_lstm() else main_h
-                new_h_t = self.get_new_h_t(curr_main_h, prev_hs, conditions, batch_size, t, args)
+                new_h_t = self.get_new_h_t(curr_main_h, prevs, conditions, batch_size, t, args)
                 if self.is_lstm():
                     hidden = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
                 else:
                     hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                # prev_hs.append(self.encode_batch_t(inputs, t+1))
                 output += [hidden[0] if self.is_lstm() else hidden]
             output = torch.stack(output, 1)
             output = self.drop(output)
@@ -393,7 +391,7 @@ class ERNNModel(nn.Module):
             return decs, hidden
 
 
-
+## END ERNN
 
 class PRNNModel(nn.Module):
     def __init__(self, args):
@@ -449,16 +447,16 @@ class PRNNModel(nn.Module):
             parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
     
-    def get_new_h_t(self, curr_h, prev_hs, conditions, batch_size, t, args):
+    def get_new_h_t(self, curr_h, prevs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
-            prev_idx = conditions[b][t]
-            '''
-            w = 1
-            use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-            prev = prev_hs[prev_idx+w][b] if use_prev else self.default_h
-            '''
-            prev = self.default_h
+            if args.baseline:
+                prev = self.default_h
+            else:
+                prev_idx = conditions[b][t]
+                w = 1
+                use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
+                prev = prevs[prev_idx+w][b] if use_prev else self.default_h
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
@@ -466,13 +464,13 @@ class PRNNModel(nn.Module):
 
 
     # TODO implement this for PRNN
-    def forward_ss(self, data, hidden, args, prev_hs=None):
+    def forward_ss(self, data, hidden, args, prevs=None):
          return 
 
-    def forward(self, data, hidden, args, prev_hs=None):
+    def forward(self, data, hidden, args, prevs=None):
         # hidden is a dict
         if args.ss:
-            return self.forward_ss(data, hidden, args, prev_hs)
+            return self.forward_ss(data, hidden, args, prevs)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -484,21 +482,21 @@ class PRNNModel(nn.Module):
             for c in range(self.num_channels):
                 embs.append(self.drop(self.encoders[c](inputs[c])))
             rnn_input = torch.cat(embs, dim=2)
-            if prev_hs is None:
+            if prevs is None:
                 # Train mode
-                prev_hs = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
+                prevs = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 main_h = hidden["main"]
                 parallel_h = hidden["parallel"]
                 curr_main_h = main_h[0] if self.is_lstm() else main_h
-                new_h_t = self.get_new_h_t(curr_main_h, prev_hs, conditions, batch_size, t, args)
+                new_h_t = self.get_new_h_t(curr_main_h, prevs, conditions, batch_size, t, args)
                 if self.is_lstm():
                     hidden["main"] = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
                     hidden["parallel"] = self.parallel_rnn(emb_t.squeeze(1), parallel_h)
                 else:
                     hidden["main"] = self.rnn(emb_t.squeeze(1), new_h_t)
                     hidden["parallel"] = self.rnn(emb_t.squeeze(1), parallel_h)
-                prev_hs.append(parallel_h[0] if self.is_lstm() else parallel_h)
+                prevs.append(parallel_h[0] if self.is_lstm() else parallel_h)
                 output += [hidden["main"][0] if self.is_lstm() else hidden["main"]]
             output = torch.stack(output, 1)
             output = self.drop(output)
@@ -511,6 +509,7 @@ class PRNNModel(nn.Module):
             return decs, hidden
 
 
+## END PRNN
 
 
 class VineRNNModel(nn.Module):
@@ -553,7 +552,7 @@ class VineRNNModel(nn.Module):
             nn.init.xavier_normal(self.decoders[i].weight.data)
             self.decoders[i].bias.data.fill_(0)
 
-    def forward(self, data, hidden, prev_hs=None):
+    def forward(self, data, hidden, prevs=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
@@ -568,16 +567,16 @@ class VineRNNModel(nn.Module):
         for c in range(self.num_channels):
             embs.append(self.drop(self.encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
-        if prev_hs is None:
-            prev_hs = [hidden]
+        if prevs is None:
+            prevs = [hidden]
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             to_cat = []
             for b in range(batch_size):
                 # TODO make this work for LSTMs
-                to_cat.append(torch.unsqueeze(prev_hs[conditions[b][t]][b], 0))
+                to_cat.append(torch.unsqueeze(prevs[conditions[b][t]][b], 0))
             new_h = torch.cat(to_cat, dim=0)
             hidden = self.rnn(emb_t.squeeze(1), new_h)
-            prev_hs.append(hidden)
+            prevs.append(hidden)
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
         output = torch.stack(output, 1)
         output = self.drop(output)
@@ -587,7 +586,7 @@ class VineRNNModel(nn.Module):
             decoded = self.decoders[i](
                 output.view(output.size(0)*output.size(1), output.size(2)))
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-        return decs, prev_hs[-1]
+        return decs, prevs[-1]
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -598,3 +597,4 @@ class VineRNNModel(nn.Module):
             return Variable(weight.new(bsz, self.nhid).zero_())
 
 
+## END VINE
