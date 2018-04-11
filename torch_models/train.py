@@ -297,6 +297,7 @@ elif args.mode == 'get_hiddens' or args.mode == 'generate':
     if args.vanilla_ckpt != '':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
+            vanilla_model.eval()
 else:
     print "Mode not supported."
     sys.exit()
@@ -435,7 +436,7 @@ best_val_loss = None
 losses = {'train': [], 'valid': []}
 train_outf = open(args.train_info_out, 'wb')
 writer = csv.writer(train_outf, delimiter=',')
-writer.writerow(['train_loss','val_loss','gen_ED')
+writer.writerow(['train_loss','val_loss','gen_ED'])
 
 if args.mode == 'train':
     # At any point you can hit Ctrl + C to break out of training early.
