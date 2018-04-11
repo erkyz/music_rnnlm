@@ -360,7 +360,8 @@ def evaluate_ssm():
         generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
                 vanilla_model)
         gen_measure_sdm = similarity.get_measure_sdm(
-                [e.original for e in generated[1:][:-1]], 
+                [e.original for e in events[1:][:-1]], 
+                #[e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'], args)
         repeating_sections = meta_dict['repeating_sections']
         for repeats in repeating_sections:
