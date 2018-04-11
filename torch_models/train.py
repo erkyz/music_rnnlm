@@ -63,6 +63,8 @@ parser.add_argument('--factorize', action='store_true',
                     help='whether to factorize embeddings')
 parser.add_argument('--ss', action='store_true',
                     help='scheduled sampling')
+parser.add_argument('--baseline', action='store_true',
+                    help='use baseline version of model')
 
 
 # Stuff for measure splitting
@@ -300,6 +302,7 @@ else:
     sys.exit()
 
 print model
+
 
 if args.cuda:
     model.cuda()
