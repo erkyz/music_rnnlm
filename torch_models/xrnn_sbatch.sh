@@ -34,7 +34,7 @@ CONDITION_NOTES=30
 C=1.5
 DISTANCE_THRESHOLD=0
 TEMPERATURE=1.0
-ARCH='ernn'
+ARCH=$3
 RNN_TYPE='GRU'
 NHID=256
 SEED=$1
@@ -50,7 +50,7 @@ VANILLA_FNAME='../tmp/vanilla4.pt'
 # TODO this is temporary
 SKIP=0
 CONDITION_NOTES=0
-python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --vanilla=$VANILLA_FILE_NAME --use_metaf --cuda --train_info_out=$2
+python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --vanilla=$VANILLA_FILE_NAME --use_metaf --cuda --train_info_out=$2 # --baseline
 # python train.py --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --most_recent --cuda 
 # python train.py --mode='generate' --arch=$ARCH --checkpoint=$VANILLA_FNAME --cuda --tmp_prefix=$TMP_PREFIX --condition_piece="../music_data/CMaj_Jigs/train/jigs_simple_chords_90.mid" --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE --c=$C --most_recent --condition_notes=$CONDITION_NOTES --outf=$OUTF --vanilla=$VANILLA_FNAME
 

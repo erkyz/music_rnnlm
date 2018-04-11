@@ -456,6 +456,9 @@ if args.mode == 'train':
             losses["train"].append(train_loss)
             losses["valid"].append(val_loss)
             writer.writerow([train_loss,val_loss,gen_ED])
+            # Write to file without closing
+            train_outf.flush()
+            os.fsync(train_outf.fileno())
             pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
