@@ -26,12 +26,22 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
     args.epoch = 0
     # Always start the generation with START
     word_idxs = [events[c][0] for c in range(sv.num_channels)] 
-     
+   
+    # Fill the entire conditions matrix first, because we'll need to see all of it
+    # in the RNN.
     for t in range(min(args.max_events, len(events[0]))):
         if args.arch in util.CONDITIONALS:
             for c in range(sv.num_channels):
-                gen_data["conditions"][c].data.fill_(conditions[c][t])
+                gen_data["conditions"][c] = torch.cat(
+                        [gen_data["conditions"][c],
+                        torch.LongTensor(1,1).zero_() + conditions[c][t]]
+                        )
+                if t == 0:
+                    gen_data["conditions"][c] = gen_data["conditions"][c][1:]
+    # We want to emulate (bsz,seqlen) even though bsz=1 
+    gen_data["conditions"][0] = gen_data["conditions"][0].permute(1,0)
 
+    for t in range(min(args.max_events, len(events[0]))):
         for c in range(sv.num_channels):
             if t < args.condition_notes:
                 gen_data["data"][c].data.fill_(events[c][t])
@@ -45,9 +55,14 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
             outputs, hidden = model(gen_data, hidden, args, prevs)
         else:
             outputs, hidden = model(gen_data, hidden, args)
+        
 
+        # print outputs
         word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
+        # print word_weights
         word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
+        # print word_idxs
+        # print ""
         for c in range(sv.num_channels):
             if t < args.condition_notes:
                 # Always include START as the first generated token
@@ -57,6 +72,7 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
 
         if word_idxs[0] == sv.special_events["end"].i and end:
             break
+
 
     return generated_events[0]
 

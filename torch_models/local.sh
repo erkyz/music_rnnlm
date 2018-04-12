@@ -13,7 +13,7 @@ ARCH=$1
 RNN_TYPE='GRU'
 NHID=128
 SEED=10
-BSZ=4
+BSZ=1 # TODO
 EMSIZE=200
 DROP=0.5
 NL=1
@@ -27,5 +27,5 @@ VANILLA_FILE_NAME="vanilla"
 
 # rm -rf ../tmp/test_sv.p
 # rm -rf ../tmp/test_corpus.p
-python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --baseline
+python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --baseline --temperature=0.5
 # python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --mode='generate' --condition_piece="../music_data/ashover[[0,1,0],[0,0,1]]/train/[0, 0, 1]3.mid" --outf="TEST"

@@ -359,6 +359,11 @@ def evaluate_ssm():
 
         generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
                 vanilla_model)
+        print [e.i for e in generated]
+        print conditions
+        '''
+        assert(False)
+        '''
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'], args)
@@ -415,6 +420,27 @@ def train():
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden, args)
+        '''
+        print data["targets"][0]
+        print data["conditions"]
+        print outputs[0][0,11]
+        assert(False)
+        '''
+
+        # print outputs
+        word_idxs = []
+        for i in range(outputs[0].size(1)):
+            m, am = 0, 0
+            for j in range(outputs[0].size(2)):
+                if outputs[0][0,i,j].data[0] > m:
+                    am = j
+                    m = outputs[0][0,i,j].data[0]
+            word_idxs.append(am)
+        '''
+        print data["data"][0]
+        print data["conditions"]
+        '''
+
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         loss = sum([criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))])
         # TODO with multiple channels, this is a multiple of batch_size
