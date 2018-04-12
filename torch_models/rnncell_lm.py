@@ -323,7 +323,7 @@ class ERNNModel(nn.Module):
             return Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
    
-    def get_new_output(self, prevs, conditions, batch_size, t, args):
+    def get_new_output(self, hidden, prevs, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             # Sometimes, t is the length of conditions minus 1, because we could be
@@ -333,9 +333,9 @@ class ERNNModel(nn.Module):
             else:
                 prev_idx = conditions[b][t+1]
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 
-            prev = prevs[prev_idx][b] if use_prev else self.default_enc
-            to_concat.append(prev)
-        return torch.cat(to_concat, dim=0) if use_prev else None
+            prev = prevs[prev_idx][b] if use_prev else hidden[b]
+            to_concat.append(prev.unsqueeze(0))
+        return torch.cat(to_concat, dim=0)
 
     def encode_batch_t(self, inputs, t): 
         batch_size = inputs[0].size(0)
@@ -377,8 +377,8 @@ class ERNNModel(nn.Module):
                 prevs.append(self.encode_batch_t(inputs, t))
                 if not train_mode: t = len(prevs)-1
                 hidden = self.rnn(emb_t.squeeze(1), hidden)
-                new_output = self.get_new_output(prevs, conditions, batch_size, t, args)
-                output += [hidden if new_output is None else new_output.unsqueeze(0)]
+                output += [self.get_new_output(
+                    hidden, prevs, conditions, batch_size, t, args)]
             output = torch.stack(output, 1)
             output = self.drop(output)
 
