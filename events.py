@@ -9,7 +9,8 @@ class Event(object):
         return self.original == other.original and self.i == other.i
 
     @staticmethod
-    def not_found(): raise Exception("event not found in vocab")
+    def not_found(): 
+        raise Exception("event not found in vocab")
 
 
 class PitchDurationEvent(Event):

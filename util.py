@@ -5,10 +5,11 @@ import numpy as np
 from glob import glob
 import fnmatch
 from collections import defaultdict
+import ast
 
 import events
 
-CONDITIONALS = {'xrnn', 'vine', 'prnn', 'ernn'}
+CONDITIONALS = {'xrnn', 'vine', 'prnn', 'ernn', 'mrnn'}
 PADDING_NAME = 'padding'
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'
@@ -84,19 +85,19 @@ def load_train_vocab(args):
         if args.progress_tokens:
             vocabf = tmp_prefix + '_sv_factorized_measuretokens.p'
             corpusf = tmp_prefix + '_corpus_factorized_measuretokens.p'
-            sv = FactorPDMVocab.load_from_corpus(args.path, vocabf)
+            sv = FactorPDMVocab.load_from_corpus(args.vocab_path, vocabf)
         else:
             vocabf = tmp_prefix + '_sv_factorized.p'
             corpusf = tmp_prefix + '_corpus_factorized.p'
-            sv = FactorPitchDurationVocab.load_from_corpus(args.path, vocabf)
-    elif args.use_metaf:
+            sv = FactorPitchDurationVocab.load_from_corpus(args.vocab_path, vocabf)
+    elif args.use_metaf and args.vocab_paths == '':
         vocabf = tmp_prefix + '_sv.p'
         corpusf = tmp_prefix + '_corpus.p'
-        sv = PitchDurationVocab.load_from_pickle(args.path, vocabf)
+        sv = PitchDurationVocab.load_from_pickle([args.path], vocabf)
     else:
         vocabf = tmp_prefix + '_sv.p'
         corpusf = tmp_prefix + '_corpus.p'
-        sv = PitchDurationVocab.load_from_corpus(args.path, vocabf)
+        sv = PitchDurationVocab.load_from_corpus(args.vocab_paths, vocabf)
 
     return sv, vocabf, corpusf
 
@@ -267,16 +268,19 @@ class PitchDurationVocab(SimpleVocab):
 
 
     @classmethod
-    def load_from_corpus(clss, path, vocab_fname):
+    def load_from_corpus(clss, paths, vocab_fname):
         if os.path.isfile(vocab_fname):
             return clss.load(vocab_fname)
         v = clss()
-        filenames = getmidfiles(path) 
-        for filename in filenames:
-            # note that measure token is already included
-            events, _ = clss.mid2orig(filename, include_measure_boundaries=False, channel=0)
-            for event in events:
-                v.add_event_to_all(event)
+        print ast.literal_eval(paths)
+        for path in ast.literal_eval(paths):
+
+            filenames = getmidfiles(path) 
+            for filename in filenames:
+                # note that measure token is already included
+                events, _ = clss.mid2orig(filename, include_measure_boundaries=False, channel=0)
+                for event in events:
+                    v.add_event_to_all(event)
         print ("PitchDurationVocab sizes:", v.sizes)
         v.save(vocab_fname)
         return v
