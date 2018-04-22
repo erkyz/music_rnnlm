@@ -272,7 +272,6 @@ class PitchDurationVocab(SimpleVocab):
         if os.path.isfile(vocab_fname):
             return clss.load(vocab_fname)
         v = clss()
-        print ast.literal_eval(paths)
         for path in ast.literal_eval(paths):
 
             filenames = getmidfiles(path) 
