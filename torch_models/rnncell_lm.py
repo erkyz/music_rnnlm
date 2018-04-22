@@ -615,10 +615,7 @@ class PRNNModel(nn.Module):
             # list of (bsz,seqlen)
             inputs = data["data"]
             # data["conditions"] is a list of (bsz,seqlen)
-            if train_mode:
-                conditions = data["conditions"][0].data.tolist() 
-            else:
-                conditions = data["conditions"][0]
+            conditions = data["conditions"][0].data.tolist() 
             output = []
             batch_size = inputs[0].size(0)
             embs = []

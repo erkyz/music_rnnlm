@@ -41,17 +41,19 @@ EMSIZE=200
 DROP=0.5
 NL=1
 EPOCHS=300
-LR=0.0005
-OUTF='test_xrnn'
+LR=0.001
 VANILLA_FNAME='../tmp/vanilla4.pt'
-TMP_PREFIX='ashover_2_cond6'
+# TMP_PREFIX='ashover_2_cond6'
+TMP_PREFIX='ashover_2'
 # DATA_DIR=../music_data/ashover\[\[0\,1\,0\]\]/
 DATA_DIR=../music_data/ashover\[\[0\,1\,0\],\[0\,0\,1\]\]/
 
 # TODO this is temporary
 SKIP=0
-CONDITION_NOTES=6
-python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --vanilla=$VANILLA_FILE_NAME --use_metaf --cuda --train_info_out=$2 --baseline
+CONDITION_NOTES=0
+# python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --vanilla=$VANILLA_FILE_NAME --use_metaf --cuda --train_info_out=$2 --baseline --temperature=0.5
+OUTF='direct_encode_010'
+python train.py --nhid=$NHID --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --vanilla=$VANILLA_FILE_NAME --use_metaf --cuda --train_info_out=$2 --baseline --temperature=0.5 --mode='generate' --condition_piece='../music_data/ashover[[0,1,0],[0,0,1]]/train/[0, 1, 0]358.mid' --outf=$OUTF
 # python train.py --nhid=$NHID --data=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --most_recent --cuda 
 # python train.py --mode='generate' --arch=$ARCH --checkpoint=$VANILLA_FNAME --cuda --tmp_prefix=$TMP_PREFIX --condition_piece="../music_data/CMaj_Jigs/train/jigs_simple_chords_90.mid" --distance_threshold=$DISTANCE_THRESHOLD --temperature=$TEMPERATURE --c=$C --most_recent --condition_notes=$CONDITION_NOTES --outf=$OUTF --vanilla=$VANILLA_FNAME
 
