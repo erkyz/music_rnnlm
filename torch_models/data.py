@@ -17,11 +17,11 @@ class Corpus(object):
     def eventize(self, path, args):
         ''' returns a list of lists, where each list is a single channel. '''
         assert os.path.exists(path)
-        meta_dicts = util.get_meta_dicts(path)
 
         nevents = 0
         maxlen = 0
         if args.use_metaf:
+            meta_dicts = util.get_meta_dicts(path)
             melodies = [[([1] + [self.vocab.orig2e[0][(str(n),d)].i for n, d in meta_dict['origs']] + [2],
                             meta_dict) for _, meta_dict in meta_dicts.iteritems()]]
         else:
@@ -32,12 +32,21 @@ class Corpus(object):
                     if len(melody) < 8 or len(melody) > 400:
                         print "Skipping", f
                         continue
+                    '''
                     meta_dict = meta_dicts[os.path.basename(f)]
                     meta_dict['f'] = f
                     melodies[c].append(
                         (
                             [self.vocab.orig2e[c][orig].i for orig in melody],
                             meta_dict        
+                        )
+                            )
+                    '''
+                    meta_dict = {'f': f}
+                    melodies[c].append(
+                        (
+                            [self.vocab.orig2e[c][orig].i for orig in melody], 
+                            meta_dict
                         )
                             )
         for c in range(self.vocab.num_channels):

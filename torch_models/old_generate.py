@@ -11,13 +11,15 @@ import data, util, similarity, beam_search, gen_util
 
 NO_INFO_EVENT_IDX = 3
 
-def generate(model, events, conditions, args, sv, vanilla_model=None, end=False):
+def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None, end=False):
     model.eval()
     hidden = model.init_hidden(1)
     if args.arch == 'prnn':
         prevs = [hidden["parallel"]]
+    elif args.arch == 'mrnn':
+        prevs = [[]] # TODO 
     elif args.arch == 'ernn':
-        prevs = []
+        prevs = [] 
     else: # XRNN
         prevs = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
@@ -41,6 +43,8 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
                     gen_data["conditions"][c] = gen_data["conditions"][c][1:]
     # We want to emulate (bsz,seqlen) even though bsz=1 
     gen_data["conditions"][0] = gen_data["conditions"][0].permute(1,0)
+    if args.use_metaf:
+        gen_data["metadata"] = [[meta_dict["segments"]]]
 
     for t in range(min(args.max_events, len(events[0]))):
         for c in range(sv.num_channels):
@@ -53,7 +57,7 @@ def generate(model, events, conditions, args, sv, vanilla_model=None, end=False)
             outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
         elif args.arch in util.CONDITIONALS:
             # prevs modified in place
-            outputs, hidden = model(gen_data, hidden, args, prevs)
+            outputs, hidden = model(gen_data, hidden, args, prevs, t)
         else:
             outputs, hidden = model(gen_data, hidden, args)
         

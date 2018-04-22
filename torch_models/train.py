@@ -29,6 +29,8 @@ parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Mod
 # Data stuff
 parser.add_argument('--path', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
+parser.add_argument('--vocab_paths', type=str, default='',
+                    help='location of the data corpus used for the vocabulary')
 parser.add_argument('--tmp_prefix', type=str, default="cmaj_nott",
                     help='tmp directory + prefix for tmp files')
 parser.add_argument('--save', type=str, default="",
@@ -134,6 +136,24 @@ def repackage_hidden(h):
     else:
         return tuple(repackage_hidden(v) for v in h)
 
+def get_and_save_rnn_ssms(source, sv, vanilla_model, save_dir):
+    ssms = {}
+    for mel_idxs, metadata in source[0]:
+        ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
+        ssms[metadata['f']] = ssm
+    pickle.dump(ssms, open(args.path + save_dir + '/ssms.p', 'wb'))
+
+def get_batch_metadata(source, batch, bsz):
+    start_idx = batch * bsz
+    this_bsz = min(bsz, (len(source) - start_idx)) # TODO why was there a -1 here?
+    source_slice = source[start_idx:start_idx+this_bsz]
+    metadata = []
+    for b in range(this_bsz):
+        print source_slice[b][1]['segments']
+        metadata.append(source_slice[b][1]['segments'])
+    return metadata
+
+
 def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     """ Returns two Tensors corresponding to the batch """
     def pad(tensor, length, val):
@@ -149,7 +169,6 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
-        print mel_idxs, len(mel_idxs)
         if args.use_metaf:
             ssm = source_slice[b][1]['ssm']
             print source_slice[b][1]['segments']
@@ -206,12 +225,13 @@ def get_batch(source, batch, bsz, sv):
     return data, target.view(-1)
 
 def batchify(source, bsz, sv, vanilla_model):
-    batch_data = {"data": [], "targets": []}
+    batch_data = {"data": [], "targets": [], "metadata": []}
     if args.arch in util.CONDITIONALS:
         batch_data["conditions"] = []
     for channel in range(len(source)):
         channel_batches = []
         channel_targets = []
+        channel_metadata = []
         channel_conditions = []
         for batch_idx in range(int(len(source[channel])/bsz)):
             # For each batch, create a Tensor
@@ -223,8 +243,13 @@ def batchify(source, bsz, sv, vanilla_model):
                 data, target = get_batch(source[channel], batch_idx, bsz, sv) 
             channel_batches.append(data)
             channel_targets.append(target)
+            if args.use_metaf:
+                channel_metadata.append(get_batch_metadata(source[channel], batch_idx, bsz))
+            else:
+                channel_metadata.append([])
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
+        batch_data["metadata"].append(channel_metadata)
         if args.arch in util.CONDITIONALS:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
@@ -244,8 +269,12 @@ def get_batch_variables(batches, batch, evaluation=False):
     # Turn data into Variable_s
     variable_batch_data = {}
     for key in batch_data:
-        variable_batch_data[key] = \
-            [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
+        if key != 'metadata':
+            variable_batch_data[key] = \
+                [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
+        else:
+            variable_batch_data[key] = batch_data[key]
+            
     variable_batch_data["cuda"] = args.cuda 
     return variable_batch_data
 
@@ -263,7 +292,11 @@ args.ntokens = sv.sizes
 vanilla_model = None
 
 if args.mode == 'train':
-    if args.arch == "hrnn":
+    if args.checkpoint != '':
+        print "Loading model checkpoint"
+        with open(args.checkpoint, 'rb') as f:
+            model = torch.load(f)
+    elif args.arch == "hrnn":
         model = hrnnlm.FactorHRNNModel(args)
     elif args.arch == "prnn":
         model = rnncell_lm.PRNNModel(args)
@@ -271,13 +304,15 @@ if args.mode == 'train':
         model = rnncell_lm.XRNNModel(args) 
     elif args.arch == "ernn":
         model = rnncell_lm.ERNNModel(args) 
+    elif args.arch == "mrnn":
+        model = rnncell_lm.ERNNModel(args) 
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
     elif args.arch == "vine":
         model = rnncell_lm.VineRNNModel(args) 
     else:
         model = rnnlm.RNNModel(args)
-
+    
     if args.arch in util.CONDITIONALS:
         if args.vanilla_ckpt != '':
             with open(args.vanilla_ckpt, 'rb') as f:
@@ -287,8 +322,9 @@ if args.mode == 'train':
     sigmoid = nn.Sigmoid()
     criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    print model
 
-elif args.mode == 'get_hiddens' or args.mode == 'generate':
+elif args.mode in ['get_hiddens', 'generate']:
     checkpoint = args.checkpoint if args.checkpoint != '' else util.get_savef(args, corpus)
     args.batch_size = 1
     with open(checkpoint, 'rb') as f:
@@ -298,17 +334,12 @@ elif args.mode == 'get_hiddens' or args.mode == 'generate':
         with open(args.vanilla_ckpt, 'rb') as f:
             vanilla_model = torch.load(f)
             vanilla_model.eval()
-else:
-    print "Mode not supported."
-    sys.exit()
 
-print model
-
-
-if args.cuda:
-    model.cuda()
-else:
-    model.cpu()
+if args.mode not in ['get_rnn_ssms']:
+    if args.cuda:
+        model.cuda()
+    else:
+        model.cpu()
 
 
 ###############################################################################
@@ -357,13 +388,10 @@ def evaluate_ssm():
         else:
             events = gen_util.get_events(sv, args, args.condition_piece)
 
-        generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
+        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
         print [e.i for e in generated]
         print conditions
-        '''
-        assert(False)
-        '''
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'], args)
@@ -481,7 +509,10 @@ if args.mode == 'train':
             print('-' * 89)
             losses["train"].append(train_loss)
             losses["valid"].append(val_loss)
-            writer.writerow([train_loss,val_loss,gen_ED])
+            if args.use_metaf:
+                writer.writerow([train_loss,val_loss,gen_ED])
+            else:
+                writer.writerow([train_loss,val_loss])
             # Write to file without closing
             train_outf.flush()
             os.fsync(train_outf.fileno())
@@ -515,9 +546,12 @@ if args.mode == 'train':
 elif args.mode == 'generate':
     for i in range(args.num_out):
         torch.manual_seed(i*args.seed)
-        path = args.path + 'train/'
-        meta_dicts = util.get_meta_dicts(path)
-        meta_dict = meta_dicts[os.path.basename(args.condition_piece)]
+        path = args.path + 'train'
+        if args.use_metaf:
+            meta_dicts = util.get_meta_dicts(path)
+            meta_dict = meta_dicts[os.path.basename(args.condition_piece)]
+        else:
+            meta_dict = None
 
         conditions = []
         if args.arch in util.CONDITIONALS:
@@ -526,7 +560,7 @@ elif args.mode == 'generate':
         else:
             events = gen_util.get_events(sv, args, args.condition_piece)
 
-        generated = old_generate.generate(model, events, conditions, args, corpus.vocab, 
+        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab, 
                 vanilla_model, end=True)
         outf = "../../generated/" + args.outf + '_' + str(i) + '.mid'
         sv.events2mid([generated], outf)
@@ -534,5 +568,16 @@ elif args.mode == 'generate':
 elif args.mode == 'get_hiddens':
     args.epoch = 0
     get_hiddens.get_hiddens(model, args, corpus.vocab, vanilla_model)
+
+elif args.mode == 'get_rnn_ssms':
+    # for song in the directory, get RNN SSM
+    with open(args.vanilla_ckpt, 'rb') as f:
+        vanilla_model = torch.load(f)
+        vanilla_model.eval()
+    get_and_save_rnn_ssms(corpus.trains, sv, vanilla_model, 'train')
+    get_and_save_rnn_ssms(corpus.valids, sv, vanilla_model, 'valid')
+    get_and_save_rnn_ssms(corpus.tests, sv, vanilla_model, 'test')
+
+
 
 
