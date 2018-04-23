@@ -105,10 +105,10 @@ for i, d in enumerate(['train', 'valid', 'test']):
 print(ts_counter)
 ts, _ = ts_counter.most_common(1)[0]
 
-for i, d in enumerate(['train', 'valid', 'test']):
+for subdir_i, d in enumerate(['train', 'valid', 'test']):
     metas = {}
     for structure_list in structure_lists:
-        for num_generated in range(num_per_structure_list[i]):
+        for num_generated in range(num_per_structure_list[subdir_i]):
             '''
             # pick one of the time signatures
             i = random.randrange(sum(ts_counter.values()))
