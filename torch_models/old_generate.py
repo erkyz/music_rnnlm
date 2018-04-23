@@ -17,7 +17,7 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
     if args.arch == 'prnn':
         prevs = [hidden["parallel"]]
     elif args.arch == 'mrnn':
-        prevs = [[]] # TODO 
+        prevs = [[]] 
     elif args.arch == 'ernn':
         prevs = [] 
     else: # XRNN
