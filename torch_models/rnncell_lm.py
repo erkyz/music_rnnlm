@@ -581,126 +581,6 @@ class ERNNModel(nn.Module):
 
 
 
-'''
-class ERNNModel(nn.Module):
-    def __init__(self, args):
-        # Note: emsize of prev_emb is just nhid for now.
-        super(ERNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-            self.add_module('prev_emb_encoder_' + str(i), nn.Embedding(ntokens[i], self.nhid)) 
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.prev_emb_encoders = AttrProxy(self, 'prev_emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-        self.sigmoid = nn.Sigmoid()
-
-    def init_weights(self):
-        self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.A)
-        self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.B)
-        self.default_enc = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.prev_emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, self.nhid).zero_()))
-        else:
-            return Variable(weight.new(bsz, self.nhid).zero_())
-    
-    def get_new_h_t(self, curr_h, prevs, conditions, batch_size, t, args):
-        to_concat = []
-        for b in range(batch_size):
-            prev_idx = conditions[b][t]
-            w = 1 
-            use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-            prev = prevs[prev_idx+w][b] if use_prev else self.default_enc
-            l = torch.matmul(self.A, curr_h[b])
-            r = torch.matmul(self.B, prev)
-            to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
-        return torch.cat(to_concat, dim=0)
-
-    def encode_batch_t(self, inputs, t): 
-        batch_size = inputs[0].size(0)
-        to_concat = [] 
-        for b in range(batch_size):
-            to_concat.append(self.prev_emb_encoders[0](inputs[0][b][t]))
-        return torch.cat(to_concat, dim=0)
-
-    # TODO implement this for ERNN
-    def forward_ss(self, data, hidden, args, prevs=None):
-         return 
-
-    def forward(self, data, hidden, args, prevs=None):
-        # hidden is a dict
-        # what we call "prevs" is not actually previous hidden states.
-        if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
-        else:
-            # list of (bsz,seqlen)
-            inputs = data["data"]
-            # data["conditions"] is a list of (bsz,seqlen)
-            conditions = data["conditions"][0].data.tolist() # TODO
-            # print inputs[0][0], conditions[0]
-            # print "-"*88
-            output = []
-            batch_size = inputs[0].size(0)
-            embs = []
-            for c in range(self.num_channels):
-                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-            rnn_input = torch.cat(embs, dim=2)
-            if prevs is None:
-                # Train mode. Need to save this as a list because of generate-mode.
-                prevs = []
-            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                # Encoding is based on inputs, not outputs.
-                prevs.append(self.encode_batch_t(inputs, t))
-                main_h = hidden
-                curr_main_h = main_h[0] if self.is_lstm() else main_h
-                new_h_t = self.get_new_h_t(curr_main_h, prevs, conditions, batch_size, t, args)
-                if self.is_lstm():
-                    hidden = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
-                else:
-                    hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                output += [hidden[0] if self.is_lstm() else hidden]
-            output = torch.stack(output, 1)
-            output = self.drop(output)
-
-            decs = []
-            for i in range(self.num_channels):
-                decoded = self.emb_decoders[i](
-                    output.view(output.size(0)*output.size(1), output.size(2)))
-                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, hidden
-'''
-
-
 ## END ERNN
 
 class PRNNModel(nn.Module):
@@ -909,3 +789,6 @@ class VineRNNModel(nn.Module):
 
 
 ## END VINE
+
+
+
