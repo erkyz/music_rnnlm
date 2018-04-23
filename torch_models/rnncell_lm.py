@@ -758,7 +758,7 @@ class PRNNModel(nn.Module):
     def forward_ss(self, data, hidden, args, prevs=None):
          return 
 
-    def forward(self, data, hidden, args, prevs=None):
+    def forward(self, data, hidden, args, prevs=None, curr_t=None):
         # hidden is a dict
         if args.ss:
             return self.forward_ss(data, hidden, args, prevs)
