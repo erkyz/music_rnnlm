@@ -9,21 +9,21 @@ DISTANCE_THRESHOLD=0
 TEMPERATURE=1.0
 ARCH=$1
 RNN_TYPE='GRU'
-NHID=256
+NHID=128
 SEED=10
 BSZ=4 # TODO
 EMSIZE=200
 DROP=0.5
 NL=1
-EPOCHS=75
+EPOCHS=20
 FILE_NAME="../tmp/"$ARCH"_"$C"_"$DISTANCE_THRESHOLD"_"$RNN_TYPE"_drop"$DROP"_nh"$NHID"_em"$EMSIZE"_skip$SKIP.pt"
 
-DATA_DIR="../music_data/ashover[[0,1,0],[0,0,1]]/" 
+DATA_DIR="../music_data/ashover[[0,0,1]]/" 
 VOCAB_PATHS=\[\"$DATA_DIR\",\"$ASHOVER\"\]
 
 LR=0.001
-TMP_PREFIX="010_001"
-# python train.py --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --temperature=0.5 --save=$SAVE --baseline
-python train.py --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --temperature=0.7 --save=$SAVE --mode='generate' --condition_piece="../music_data/ashover[[0,1,0],[0,0,1]]/train/[0, 0, 1]3.mid" --checkpoint=$SAVE --outf='mrnn'
+TMP_PREFIX="001"
+python train.py --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --temperature=0.5 --save=$SAVE --baseline
+# python train.py --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --use_metaf --train_info_out=$2 --temperature=0.7 --save=$SAVE --mode='generate' --condition_piece="../music_data/ashover[[0,1,0],[0,0,1]]/train/[0, 0, 1]3.mid" --checkpoint=$SAVE --outf='mrnn'
 
 

@@ -291,6 +291,8 @@ class MRNNModel(nn.Module):
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
+        self.fc1 = nn.Linear(self.nhid*3, self.nhid)
+        self.fc2 = nn.Linear(self.nhid, 1)
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         # For main RNN
@@ -330,20 +332,14 @@ class MRNNModel(nn.Module):
         prev_dec = [Variable(weight.new(1, self.nhid).zero_()) for b in range(bsz)]
         return {'main': main, 'prev_enc': prev_enc, 'prev_dec': prev_dec}
    
-    def get_new_output(self, hidden, prevs, conditions, batch_size, t, args):
-        to_concat = []
-        for b in range(batch_size):
-            # Sometimes, t is the length of conditions minus 1, because we could be
-            # be trying to get the next condition, but we're already at the end.
-            if t == len(conditions[b])-1:
-                prev_idx = -1
-            else:
-                prev_idx = conditions[b][t+1]
-            use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 
-            prev = prevs[prev_idx][b] if use_prev else hidden[b]
-            to_concat.append(prev.unsqueeze(0))
-        return torch.cat(to_concat, dim=0)
-
+    def get_gated_output(self, h_main, h_dec, h_enc):
+        x = torch.cat([h_main, h_dec, h_enc]).view(-1)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        alpha = F.sigmoid(x)
+        if random.random() < 0.025:
+            print alpha
+        return alpha*h_dec + (1-alpha)*h_main
 
     # TODO implement this 
     def forward_ss(self, data, hidden, args, prevs=None):
@@ -422,10 +418,14 @@ class MRNNModel(nn.Module):
                 # Replace output with decoder output if we're decoding a measure 
                 to_concat = []
                 for b in range(bsz):
+                    h_main = hidden['main'][b].unsqueeze(0)
+                    h_prev = hidden['prev_dec'][b]
                     if replace_output_with_decoder[b]:
-                        to_concat.append(hidden['prev_dec'][b])
+                        prev_measure_no = 0 # TODO
+                        to_concat.append(self.get_gated_output(
+                            h_main, h_prev, prevs[b][prev_measure_no]))
                     else:
-                        to_concat.append(hidden['main'][b].unsqueeze(0))
+                        to_concat.append(h_main)
                 output += [torch.cat(to_concat, dim=0)]
 
             output = torch.stack(output, 1)

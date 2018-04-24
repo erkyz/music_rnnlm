@@ -54,16 +54,16 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
                 gen_data["data"][c].data.fill_(word_idxs[c])
 
         if args.arch == "hrnn":
-            outputs, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
+            outputs_t, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
         elif args.arch in util.CONDITIONALS:
             # prevs modified in place
-            outputs, hidden = model(gen_data, hidden, args, prevs, t)
+            outputs_t, hidden = model(gen_data, hidden, args, prevs, t)
         else:
-            outputs, hidden = model(gen_data, hidden, args)
+            outputs_t, hidden = model(gen_data, hidden, args)
         
 
-        # print outputs
-        word_weights = [F.softmax(outputs[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
+        # print outputs_t
+        word_weights = [F.softmax(outputs_t[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
         # print word_weights
         word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
         # print word_idxs
