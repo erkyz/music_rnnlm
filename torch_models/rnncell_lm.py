@@ -291,8 +291,10 @@ class MRNNModel(nn.Module):
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        self.fc1 = nn.Linear(self.nhid*3, self.nhid)
+        self.fc1 = nn.Linear(self.nhid*2, self.nhid)
         self.fc2 = nn.Linear(self.nhid, 1)
+        self.fc3 = nn.Linear(self.nhid*2, self.nhid)
+        self.fc4 = nn.Linear(self.nhid, 1)
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         # For main RNN
@@ -332,14 +334,27 @@ class MRNNModel(nn.Module):
         prev_dec = [Variable(weight.new(1, self.nhid).zero_()) for b in range(bsz)]
         return {'main': main, 'prev_enc': prev_enc, 'prev_dec': prev_dec}
    
-    def get_gated_output(self, h_main, h_dec, h_enc):
-        x = torch.cat([h_main, h_dec, h_enc]).view(-1)
-        x = self.fc1(x)
-        x = self.fc2(x)
+    def get_new_output(self, h_main, h_dec):
+        x = torch.cat([h_main, h_dec]).view(-1)
+        x = self.fc3(x)
+        x = self.fc4(x)
         alpha = F.sigmoid(x)
-        if random.random() < 0.025:
-            print alpha
         return alpha*h_dec + (1-alpha)*h_main
+
+    def get_decoder_h0(self, h_main, prevs):
+        # self-attention over previous measure encodings
+        # TODO speed up
+        vs = []
+        for prev_enc in prevs:
+            x = torch.cat([h_main, prev_enc.squeeze()])
+            x = self.fc2(self.fc1(x))
+            vs.append(x)
+        softmax = F.softmax(torch.cat(vs))
+        '''
+        if random.random() < 0.1:
+            print softmax
+        '''
+        return torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
 
     # TODO implement this 
     def forward_ss(self, data, hidden, args, prevs=None):
@@ -397,9 +412,8 @@ class MRNNModel(nn.Module):
                         
                         # Check if we should begin repeating at this measure
                         if t != len(conditions[b])-1 and conditions[b][t] == -1 and conditions[b][t+1] != -1:
-                            prev_measure_no = 0 # TODO this only works for the synth data.
                             # Init the decoder RNN with the encoded measure
-                            hidden['prev_dec'][b] = prevs[b][prev_measure_no]
+                            hidden['prev_dec'][b] = self.get_decoder_h0(hidden['main'][b], prevs[b])
 
                         # Reset prev_enc RNN
                         hidden['prev_enc'][b] = Variable(weight.new(1, self.nhid).zero_())
@@ -421,9 +435,7 @@ class MRNNModel(nn.Module):
                     h_main = hidden['main'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
                     if replace_output_with_decoder[b]:
-                        prev_measure_no = 0 # TODO
-                        to_concat.append(self.get_gated_output(
-                            h_main, h_prev, prevs[b][prev_measure_no]))
+                        to_concat.append(self.get_new_output(h_main, h_prev))
                     else:
                         to_concat.append(h_main)
                 output += [torch.cat(to_concat, dim=0)]
