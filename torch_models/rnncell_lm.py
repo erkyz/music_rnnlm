@@ -337,9 +337,11 @@ class MRNNModel(nn.Module):
         x = self.fc1(x)
         x = self.fc2(x)
         alpha = F.sigmoid(x)
+        '''
         if random.random() < 0.025:
             print alpha
-        return alpha*h_dec + (1-alpha)*h_main
+        '''
+        return h_dec # alpha*h_dec + (1-alpha)*h_main
 
     # TODO implement this 
     def forward_ss(self, data, hidden, args, prevs=None):
