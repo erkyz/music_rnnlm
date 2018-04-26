@@ -86,6 +86,8 @@ class RNNModel(nn.Module):
 
 
 
+
+
 class CRNNModel(nn.Module):
     ''' Conditional RNN: in this case, we concat the conditions to the RNN input '''
     # TODO OOP.

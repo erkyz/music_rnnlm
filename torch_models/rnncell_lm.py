@@ -32,8 +32,9 @@ class RNNCellModel(nn.Module):
         if args.rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, args.rnn_type + 'Cell')(
                 args.emsize*self.num_channels, nhid, nlayers)
+        out_ntokens = 2 if args.out2 else ntokens[0] # TODO
         for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
+            self.add_module('emb_decoder_' + str(i), nn.Linear(nhid, out_ntokens)) 
         self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
         self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
 
