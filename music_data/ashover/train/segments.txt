@@ -1,0 +1,36 @@
+ashover_simple_chords_12.mid
+1 18 48 61 113 119 120 172 
+ashover_simple_chords_13.mid
+1 35 42 43 65 134 135 168 175 176 198 
+ashover_simple_chords_14.mid
+1 11 22 33 44 55 66 77 88 92 99 103 110 114 121 132 
+ashover_simple_chords_15.mid
+1 9 11 32 34 54 56 58 60 68 79 81 93 100 102 123 125 145 147 149 151 159 170 172 184 186 188 
+ashover_simple_chords_24.mid
+1 6 10 33 34 38 42 65 80 96 111 127 142 158 173 
+ashover_simple_chords_25.mid
+1 13 24 44 56 67 87 102 109 
+ashover_simple_chords_26.mid
+1 7 11 28 32 43 47 51 68 72 83 95 106 112 116 
+ashover_simple_chords_27.mid
+1 4 9 14 19 41 42 44 49 54 59 81 82 126 130 135 140 145 
+ashover_simple_chords_3.mid
+1 31 62 95 127 128 225 267 
+ashover_simple_chords_30.mid
+1 13 18 24 36 41 47 59 64 70 82 87 93 115 131 
+ashover_simple_chords_36.mid
+1 9 21 33 45 46 53 77 89 
+ashover_simple_chords_38.mid
+1 10 16 21 29 55 59 74 84 99 109 110 118 131 132 140 
+ashover_simple_chords_39.mid
+1 30 67 96 
+ashover_simple_chords_42.mid
+1 5 19 38 64 65 73 90 94 103 124 125 129 143 162 188 189 197 214 218 227 248 
+ashover_simple_chords_45.mid
+1 48 95 106 116 138 148 158 
+ashover_simple_chords_6.mid
+1 3 8 15 18 22 34 39 46 49 53 61 62 63 71 74 78 94 96 101 108 111 115 123 131 134 138 
+ashover_simple_chords_7.mid
+1 11 13 18 38 48 50 55 75 133 143 201 204 
+ashover_simple_chords_8.mid
+1 12 13 23 34 38 43 54 55 65 76 80 85 97 109 121 125 

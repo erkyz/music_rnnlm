@@ -1,7 +1,7 @@
 addpath(genpath('../miditoolbox'));
-path = 'music_data/CMaj_Nottingham/train/';
+path = 'music_data/ashover/test/';
 files = dir(strcat(path, '*.mid'));
-thres = 0.24; % empirically reached this.
+thres = 0.21; % empirically reached this.
 max_ratio = 0.2; % one in five.
 min_sections = 2;
 fileID = fopen(strcat(path, 'segments.txt'),'w');
