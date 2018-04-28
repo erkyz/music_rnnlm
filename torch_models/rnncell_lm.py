@@ -292,7 +292,7 @@ class MRNNModel(nn.Module):
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        self.fc1 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for the simscore
+        self.fc1 = nn.Linear(self.nhid+1, self.nhid) # +1 for the simscore
         self.fc2 = nn.Linear(self.nhid, 1)
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
@@ -353,12 +353,15 @@ class MRNNModel(nn.Module):
         for i, prev_enc in enumerate(prevs):
             # Get the similarity score of the ith previous segment
             s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False) 
-            x = torch.cat([h_backbone, prev_enc.squeeze(), s])
+            # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
+            x = torch.cat([prev_enc.squeeze(), s])
             x = self.fc2(self.fc1(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
+        '''
         if random.random() < 0.02:
             print softmax
+        '''
         decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
         score_softmax = torch.sum(torch.cat([scores[i]*softmax[i] for i in range(len(prevs))]), 0)
         return decoder_h0, score_softmax
