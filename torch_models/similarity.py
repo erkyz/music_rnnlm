@@ -160,7 +160,7 @@ def get_note_ssm_future(melody, args, bnw=False):
     return ssm, rawDiffs
 
 
-def get_measure_sdm(melody, segments, args):
+def get_measure_sdm(melody, segments):
     ''' melody is a PDV melody '''
     ''' segments is a list of tuples of indices of where segments begin and end'''
     differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
