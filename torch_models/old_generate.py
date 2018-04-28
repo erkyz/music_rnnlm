@@ -23,26 +23,14 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
     else: # XRNN
         prevs = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
+    gen_data["conditions"] = conditions
     gen_data["cuda"] = args.cuda
     generated_events = [[sv.i2e[c][events[c][0]]] for c in range(sv.num_channels)]
     args.epoch = 0
     # Always start the generation with START
     word_idxs = [events[c][0] for c in range(sv.num_channels)] 
-   
-    # Fill the entire conditions Tensor first, because we'll need to see all of it
-    # in the RNN.
-    for t in range(min(args.max_events, len(events[0]))):
-        if args.arch in util.CONDITIONALS:
-            for c in range(sv.num_channels):
-                gen_data["conditions"][c] = torch.cat(
-                        [gen_data["conditions"][c],
-                        (torch.cuda.LongTensor(1,1).zero_() + conditions[c][t] 
-                        if args.cuda else
-                        torch.LongTensor(1,1).zero_() + conditions[c][t])])
-                if t == 0:
-                    gen_data["conditions"][c] = gen_data["conditions"][c][1:]
-    # We want to emulate (bsz,seqlen) even though bsz=1 
-    gen_data["conditions"][0] = gen_data["conditions"][0].permute(1,0)
+
+    # Pass in the entirety of conditions even though we only look at up to t
     if args.use_metaf:
         gen_data["metadata"] = [[meta_dict["segments"]]]
 

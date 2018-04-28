@@ -176,15 +176,20 @@ for subdir_i, d in enumerate(['train', 'valid', 'test']):
             ssm[0,0] = 1
             ssm[-1,-1] = 1
 
-            # Create a num_segments x num_segments SSM (1 or 0)
             indices_of_sections = [[j for j in range(len(structure_list)) if structure_list[j] == i] for i in range(num_sections)]
             repeating_sections = [x for x in indices_of_sections if len(x) > 1]
-             
+            
+            avg_ed = 5
+
+            # Create a len(structure_lis)^2 SSM (1 or 0)
+            segment_sdm = [[0 if structure_list[j] == structure_list[i] else avg_ed for j in range(len(structure_list))] for i in range(len(structure_list))]
+
             # Note that segments doesn't include START or END.
             metas[fileNameWithStructure] = {
                     'origs': origs,
                     'segments': list(zip(sample_starting_idxs, sample_ending_idxs)),
                     'ssm': ssm, 
+                    'segment_sdm': segment_sdm, 
                     'repeating_sections': repeating_sections,
                     'ts': ts,
                     }

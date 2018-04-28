@@ -38,6 +38,7 @@ parser.add_argument('--save', type=str, default="",
 parser.add_argument('--train_info_out', type=str, default="test.csv",
                     help='where to save train info')
 parser.add_argument('--use_metaf', action='store_true')
+parser.add_argument('--synth_data', action='store_true')
 
 # RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
@@ -164,13 +165,14 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
     target_slice = [[mel[i+1] for i in range(len(mel)-1)] + [PADDING] for mel, _ in source_slice]
     maxlen = len(source_slice[0][0])
     data = torch.LongTensor(this_bsz,maxlen).zero_()
-    conditions = torch.LongTensor(this_bsz,maxlen).zero_()
+    conditions = [None for b in range(bsz)]
     target = torch.LongTensor(this_bsz,maxlen).zero_()
     for b in range(this_bsz):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
         if args.use_metaf:
             ssm = source_slice[b][1]['ssm']
+            batch_conditions = source_slice[b][1]['segment_sdm']
             print source_slice[b][1]['segments']
             print source_slice[b][1]['origs']
             # print source_slice[b][1]['f']
@@ -182,20 +184,20 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
             ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=True)
         else:
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
-        batch_conditions = similarity.get_prev_match_idx(ssm, args, sv)
+        '''
+        else:
+            batch_conditions = similarity.get_prev_match_idx(ssm, args, sv)
+        '''
         # print zip(mel_idxs, range(len(mel_idxs)))
         # print zip(batch_conditions, range(len(batch_conditions)))
         data[b] = pad(torch.LongTensor(mel_idxs), maxlen, PADDING)
-        # We pad the end of conditions with zeros, which is technically incorrect.
-        # But because the outputs are ignored anyways, we don't care.
-        conditions[b] = pad(torch.LongTensor(batch_conditions), maxlen, -1) 
+        conditions[b] = batch_conditions
         t = target_slice[b] 
         for j in xrange(min(args.skip_first_n_note_losses, len(t))):
             t[j] = PADDING
         target[b] = pad(torch.LongTensor(t), maxlen, PADDING)
     if args.cuda: 
         data = data.cuda()
-        conditions = conditions.cuda()
         target = target.cuda()
     return data, conditions, target.view(-1)
 
@@ -250,8 +252,7 @@ def batchify(source, bsz, sv, vanilla_model):
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
         batch_data["metadata"].append(channel_metadata)
-        if args.arch in util.CONDITIONALS:
-            batch_data["conditions"].append(channel_conditions)
+        batch_data["conditions"].append(channel_conditions)
     return batch_data
 
 def get_batch_variables(batches, batch, evaluation=False):
@@ -269,7 +270,7 @@ def get_batch_variables(batches, batch, evaluation=False):
     # Turn data into Variable_s
     variable_batch_data = {}
     for key in batch_data:
-        if key != 'metadata':
+        if key in {'data', 'targets'}:
             variable_batch_data[key] = \
                 [Variable(batch_data[key][c], volatile=evaluation) for c in range(num_channels)]
         else:
@@ -384,11 +385,9 @@ def evaluate_ssm():
         meta_dict = meta_dicts[os.path.basename(songf)]
 
         conditions = []
+        events = gen_util.get_events(sv, args, args.condition_piece, meta_dict)
         if args.arch in util.CONDITIONALS:
-            events, conditions = gen_util.get_events_and_conditions(
-                    sv, args, vanilla_model, meta_dict)
-        else:
-            events = gen_util.get_events(sv, args, args.condition_piece)
+            conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
         generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
@@ -451,9 +450,6 @@ def train():
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         segs_seq, _ = segmenter(data, hidden2, args)
-        print segs_seq
-        print data["metadata"]
-        assert(False)
         outputs, hidden = model(data, hidden, args)
         '''
         print data["targets"][0]
@@ -504,7 +500,7 @@ if args.mode == 'train':
             args.epoch = epoch-1
             epoch_start_time = time.time()
             train_loss = train()
-            if args.use_metaf:
+            if args.synth_data:
                 gen_ED = evaluate_ssm()
                 print gen_ED
             val_loss = evaluate(valid_data, valid_mb_indices)
