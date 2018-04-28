@@ -46,7 +46,7 @@ def get_meta_dicts(path):
     if os.path.exists(path):
         return pickle.load(open(path + '/meta.p', 'rb'))
     else:
-        return {}
+        return None
 
 def get_datadumpf(args, extra=''):
     tmp_prefix = '../tmp/' + args.tmp_prefix

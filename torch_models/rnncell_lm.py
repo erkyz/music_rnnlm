@@ -292,13 +292,14 @@ class MRNNModel(nn.Module):
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        self.fc1 = nn.Linear(self.nhid*2, self.nhid)
+        self.fc1 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for the simscore
         self.fc2 = nn.Linear(self.nhid, 1)
-        self.fc3 = nn.Linear(self.nhid*2, self.nhid)
-        self.fc4 = nn.Linear(self.nhid, 1)
+        # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
+        self.fc3 = nn.Linear(1, self.nhid/2)
+        self.fc4 = nn.Linear(self.nhid/2, 1)
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        # For main RNN
+        # For backbone RNN
         self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
         self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
         # For prev_enc RNN
@@ -330,24 +331,29 @@ class MRNNModel(nn.Module):
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
-        main = Variable(weight.new(bsz, self.nhid).zero_())
+        backbone = Variable(weight.new(bsz, self.nhid).zero_())
         prev_enc = [Variable(weight.new(1, self.nhid).zero_()) for b in range(bsz)]
         prev_dec = [Variable(weight.new(1, self.nhid).zero_()) for b in range(bsz)]
-        return {'main': main, 'prev_enc': prev_enc, 'prev_dec': prev_dec}
+        return {'backbone': backbone, 'prev_enc': prev_enc, 'prev_dec': prev_dec}
    
-    def get_new_output(self, h_main, h_dec):
-        x = torch.cat([h_main, h_dec]).view(-1)
-        x = self.fc3(x)
-        x = self.fc4(x)
+    def get_new_output(self, h_backbone, h_dec, score_softmax):
+        # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
+        x = score_softmax
+        # x = F.relu(self.fc3(x))
+        # x = F.relu(self.fc4(x))
+        x = self.fc4(F.relu(self.fc3(x)))
         alpha = F.sigmoid(x)
-        return alpha*h_dec + (1-alpha)*h_main
+        if random.random() < 0.01:
+            print score_softmax.data[0], alpha.data[0]
+        return alpha*h_dec + (1-alpha)*h_backbone
 
-    def get_decoder_h0(self, h_main, prevs):
-        # self-attention over previous measure encodings
-        # TODO speed up
+    def self_attention(self, h_backbone, prevs, scores):
+        # self-attention over previous segment encodings
         vs = []
-        for prev_enc in prevs:
-            x = torch.cat([h_main, prev_enc.squeeze()])
+        for i, prev_enc in enumerate(prevs):
+            # Get the similarity score of the ith previous segment
+            s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False) 
+            x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = self.fc2(self.fc1(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
@@ -355,7 +361,9 @@ class MRNNModel(nn.Module):
         if random.random() < 0.1:
             print softmax
         '''
-        return torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
+        decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
+        score_softmax = torch.sum(torch.cat([scores[i]*softmax[i] for i in range(len(prevs))]), 0)
+        return decoder_h0, score_softmax
 
     # TODO implement this 
     def forward_ss(self, data, hidden, args, prevs=None):
@@ -371,8 +379,7 @@ class MRNNModel(nn.Module):
             # list of (bsz,seqlen)
             inputs = data["data"]
             bsz = inputs[0].size(0)
-            # data["conditions"] is a list of (bsz,seqlen)
-            conditions = data["conditions"][0].data.tolist()
+            conditions = data["conditions"][0]
             segs = data["metadata"][0]
             # NOTE segs is indexed ignoring the START token, so it's aligned with OUTPUTS!
             beg_idxs = [[s[0] for s in segs[b]] for b in range(bsz)]
@@ -386,16 +393,19 @@ class MRNNModel(nn.Module):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             emb_start = self.emb_encoders[0](inputs[0][0][0])
             rnn_input = torch.cat(embs, dim=2)
+            batch_score_softmax = [Variable(torch.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
+
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
                 prevs = [[] for b in range(bsz)]
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Note that t is input-indexed
                 if curr_t is not None: t = curr_t
-                replace_output_with_decoder = [False]*bsz
-
+                # We initialize the score_softmax to be such that the model prefers 
+                # the backbone RNN in the first measure. TODO magic number
                 # Encoding is based on input indexing, not outputs.
                 for b in range(bsz):
+
                     emb_t_b = emb_t.squeeze(1)[b].unsqueeze(0)
                     # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
                     t_to_use = t if train_mode else 0
@@ -410,35 +420,33 @@ class MRNNModel(nn.Module):
                     if t in beg_idxs[b] and t != 0:
                         # Add the prev measure encoding to prevs
                         prevs[b].append(hidden['prev_enc'][b])
-                        
-                        # Check if we should begin repeating at this measure
-                        if t != len(conditions[b])-1 and conditions[b][t] == -1 and conditions[b][t+1] != -1:
-                            # Init the decoder RNN with the encoded measure
-                            hidden['prev_dec'][b] = self.get_decoder_h0(hidden['main'][b], prevs[b])
+
+                        # Sets |score_softmax| to the score softmax that'll be
+                        # used in the gating at _this_ measure. 
+                        # print conditions[b][len(prevs[b])]
+                        decoder_h0, score_softmax = self.self_attention(hidden['backbone'][b], prevs[b], conditions[b][len(prevs[b])])
+                        batch_score_softmax[b] = score_softmax
+
+                        # Init the decoder RNN
+                        hidden['prev_dec'][b] = decoder_h0
 
                         # Reset prev_enc RNN
                         hidden['prev_enc'][b] = Variable(weight.new(1, self.nhid).zero_())
 
 
-                    # Check if we should use the decoder RNN at this measure
-                    if t != len(conditions[b])-1 and conditions[b][t+1] != -1:
-                        # Run the decoder RNN
-                        hidden['prev_dec'][b] = \
-                                self.prev_dec_rnn(emb_t_b_dec, hidden['prev_dec'][b])
-                        replace_output_with_decoder[b] = True
+                    # Run the decoder RNN
+                    hidden['prev_dec'][b] = \
+                            self.prev_dec_rnn(emb_t_b_dec, hidden['prev_dec'][b])
 
-                # Run the main RNN
-                hidden['main'] = self.rnn(emb_t.squeeze(1), hidden['main'])
+                # Run the backbone RNN
+                hidden['backbone'] = self.rnn(emb_t.squeeze(1), hidden['backbone'])
 
                 # Replace output with decoder output if we're decoding a measure 
                 to_concat = []
                 for b in range(bsz):
-                    h_main = hidden['main'][b].unsqueeze(0)
+                    h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    if replace_output_with_decoder[b]:
-                        to_concat.append(self.get_new_output(h_main, h_prev))
-                    else:
-                        to_concat.append(h_main)
+                    to_concat.append(self.get_new_output(h_backbone, h_prev, batch_score_softmax[b]))
                 output += [torch.cat(to_concat, dim=0)]
 
             output = torch.stack(output, 1)

@@ -13,7 +13,7 @@ with open(d + 'segments.txt') as segs:
         else:
             starts = [int(x)-1 for x in l.split(' ')[:-1]]
             ends = starts[1:] + [-1] # last end shouldn't matter.
-            metas[f] = {'segments': list(zip(starts, ends))}
+            metas[f] = {'segments': list(zip(starts, ends)), 'f': f}
 
-pickle.dump(metas, open(d + 'metas.p', 'wb'))
+pickle.dump(metas, open(d + 'meta.p', 'wb'))
 
