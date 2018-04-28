@@ -40,7 +40,8 @@ DROP=0.5
 NL=1
 EPOCHS=50
 
-DATA_DIR="../music_data/ashover_010_001_large/" 
+# DATA_DIR="../music_data/ashover_010_001_large/" 
+DATA_DIR="../music_data/ashover/" 
 VOCAB_PATHS=\[\"$DATA_DIR\"\]
 
 LR=0.001
