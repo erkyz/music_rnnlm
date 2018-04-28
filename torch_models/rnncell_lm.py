@@ -357,10 +357,8 @@ class MRNNModel(nn.Module):
             x = self.fc2(self.fc1(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
-        '''
-        if random.random() < 0.1:
+        if random.random() < 0.02:
             print softmax
-        '''
         decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
         score_softmax = torch.sum(torch.cat([scores[i]*softmax[i] for i in range(len(prevs))]), 0)
         return decoder_h0, score_softmax
