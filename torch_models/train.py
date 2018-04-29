@@ -171,17 +171,15 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
         if args.use_metaf:
-            # TODO something about synth data
             ssm = source_slice[b][1]['ssm']
             batch_conditions = source_slice[b][1]['segment_sdm']
-            print source_slice[b][1]['segments']
-            print source_slice[b][1]['origs']
+            # print source_slice[b][1]['segments']
             # print source_slice[b][1]['f']
             # print ssm
-            print maxlen
+            # print maxlen
         elif args.vanilla_ckpt == '':
-            # TODO implement this.
-            melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
+            pass
+            # TODO other similarity measures.
         else:
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
         '''

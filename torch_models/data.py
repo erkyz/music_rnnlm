@@ -29,7 +29,6 @@ class Corpus(object):
                     if basename not in meta_dicts:
                         print "Skipping", basename
                         continue
-                    print "hello"
                     meta_dict = meta_dicts[basename]
                 else:
                     meta_dict['f'] = f
