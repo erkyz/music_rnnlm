@@ -249,7 +249,8 @@ def batchify(source, bsz, sv, vanilla_model):
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
         batch_data["metadata"].append(channel_metadata)
-        batch_data["conditions"].append(channel_conditions)
+        if args.arch in util.CONDITIONALS:
+            batch_data["conditions"].append(channel_conditions)
     return batch_data
 
 def get_batch_variables(batches, batch, evaluation=False):
