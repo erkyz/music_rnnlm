@@ -392,7 +392,7 @@ def evaluate_ssm():
         print conditions
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
-                meta_dict['segments'], args)
+                meta_dict['segments'])
         repeating_sections = meta_dict['repeating_sections']
         for repeats in repeating_sections:
             repeat_tups = list(combinations(repeats, 2))
@@ -507,7 +507,7 @@ if args.mode == 'train':
             print('-' * 89)
             losses["train"].append(train_loss)
             losses["valid"].append(val_loss)
-            if args.use_metaf:
+            if args.use_metaf and args.synth_data:
                 writer.writerow([train_loss,val_loss,gen_ED])
             else:
                 writer.writerow([train_loss,val_loss])
