@@ -51,7 +51,7 @@ def add_to_section(section, name, duration):
 # Each type will have an equal number of examples generated.
 structure_lists = ast.literal_eval(args.structure_lists)
 
-out_dir = args.out_dir + '/' + args.genre + args.structure_lists + '/'
+out_dir = args.out_dir + '/' + args.structure_lists + '/'
 if args.rm and os.path.exists(out_dir):
     shutil.rmtree(out_dir)
 os.mkdir(out_dir)
@@ -62,21 +62,46 @@ os.mkdir(out_dir + 'test')
 MIN_SECTION_LEN = 4
 num_per_structure_list = ast.literal_eval(args.num_per_structure_list)
 num_sections = max([max(l) for l in structure_lists])+1
-ts_counter = Counter()
-ts_sections = {}
+if os.path.exists(args.data + 'sections.p'):
+    ts_sections, ts_counter = pickle.load(open(args.data + 'sections.p', 'rb'))
+else:
+    ts_counter = Counter()
+    ts_sections = {}
 
-for i, d in enumerate(['train', 'valid', 'test']):
-    # For each type of structure_list, we create that structure_list for a song. So 
-    # each sample is a list of sections.
+    for i, d in enumerate(['train', 'valid', 'test']):
+        # For each type of structure_list, we create that structure_list for a song. So 
+        # each sample is a list of sections.
 
-    for f in glob.glob(args.data + d + '/' + args.genre + "*.mid"):
-        score = music21.converter.parse(f)
-        time_signature = util.get_ts(score)
-        limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
-        section_progress = 0
-        section = []
-        for part in score:
-            for e in part:
+        for f in glob.glob(args.data + d + '/' + "*.mid"):
+            score = music21.converter.parse(f)
+            time_signature = util.get_ts(score)
+            limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
+            section_progress = 0
+            section = []
+
+            # NOTE this is VERY Nottingham-specific :(
+            # First, get the chord part. This determines how long the pickup is. 
+            # We're going to ignore the pickup in each song for clean measures.
+
+            pickup_dur = 0
+            if len(score) == 1:
+                continue
+            if type(score[1][2]) is music21.note.Rest:
+                pickup_dur = score[1][2].duration.quarterLength
+            print (pickup_dur)
+
+            on_pickup = True
+            time_signature_encountered = False
+            for e in score[0]: # this is the melody Part
+                # Throw out the pickup.
+                if on_pickup and type(e) in {music21.note.Note, music21.note.Rest}:
+                    if section_progress < pickup_dur:
+                        section_progress += e.duration.quarterLength
+                        continue
+                    elif section_progress == pickup_dur:
+                        section_progress = 0
+                        on_pickup = False
+
                 if section_progress > limit:
                     assert(False)
                 if section_progress == limit:
@@ -85,21 +110,20 @@ for i, d in enumerate(['train', 'valid', 'test']):
                         ts_counter[time_signature] += 1
                     section_progress = 0
                     section = []
+                if type(e) is music21.meter.TimeSignature:
+                    if time_signature_encountered:
+                        break
+                    time_signature_encountered = True
                 if type(e) is music21.note.Note or type(e) is music21.note.Rest:
                     duration = e.duration.quarterLength
                     name = e.nameWithOctave if type(e) is music21.note.Note else 'rest'
                     if section_progress + duration > limit:
-                        cut_duration = limit - section_progress
-                        add_to_section(section, name, cut_duration)
-                        ts_counter[time_signature] += 1
-                        ts_sections.setdefault(time_signature, []).append(section)
-                        
-                        section = []
-                        section_progress = section_progress + duration - limit
-                        add_to_section(section, name, section_progress)
+                        break
                     else:
                         add_to_section(section, name, duration)
                         section_progress += duration 
+    
+    pickle.dump((ts_sections, ts_counter), open(args.data + 'sections.p', 'wb'))
 
 # get most frequent time signature
 print(ts_counter)
