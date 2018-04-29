@@ -335,7 +335,7 @@ class MRNNModel(nn.Module):
         prev_dec = [Variable(weight.new(1, self.nhid).zero_()) for b in range(bsz)]
         return {'backbone': backbone, 'prev_enc': prev_enc, 'prev_dec': prev_dec}
    
-    def get_new_output(self, h_backbone, h_dec, score_softmax):
+    def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
         # x = F.relu(self.fc3(x))
@@ -346,12 +346,15 @@ class MRNNModel(nn.Module):
             print score_softmax.data[0], alpha.data[0]
         return alpha*h_dec + (1-alpha)*h_backbone
 
-    def self_attention(self, h_backbone, prevs, scores):
+    def self_attention(self, h_backbone, prevs, scores, args):
         # self-attention over previous segment encodings
         vs = []
         for i, prev_enc in enumerate(prevs):
             # Get the similarity score of the ith previous segment
-            s = Variable(torch.cuda.FloatTensor([scores[i]]), requires_grad=False)
+            if args.cuda:
+                s = Variable(torch.cuda.FloatTensor([scores[i]]), requires_grad=False)
+            else:
+                s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
             x = self.fc2(self.fc1(x))
@@ -363,7 +366,10 @@ class MRNNModel(nn.Module):
         '''
         decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
         score_softmax = torch.sum(torch.cat(
-            [torch.mul(Variable(torch.FloatTensor([scores[i]]), requires_grad=False) ,softmax[i]) for i in range(len(prevs))]
+            [torch.mul(
+                Variable(torch.cuda.FloatTensor([scores[i]]) if args.cuda else torch.FloatTensor([scores[i]]), requires_grad=False),
+                softmax[i]
+                ) for i in range(len(prevs))]
             ), 0)
         return decoder_h0, score_softmax
 
@@ -395,7 +401,11 @@ class MRNNModel(nn.Module):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             emb_start = self.emb_encoders[0](inputs[0][0][0])
             rnn_input = torch.cat(embs, dim=2)
-            batch_score_softmax = [Variable(torch.cuda.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
+            if args.cuda:
+                batch_score_softmax = [Variable(torch.cuda.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
+            else:
+                batch_score_softmax = [Variable(torch.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
+
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
@@ -426,7 +436,7 @@ class MRNNModel(nn.Module):
                         # Sets |score_softmax| to the score softmax that'll be
                         # used in the gating at _this_ measure. 
                         # print conditions[b][len(prevs[b])]
-                        decoder_h0, score_softmax = self.self_attention(hidden['backbone'][b], prevs[b], conditions[b][len(prevs[b])])
+                        decoder_h0, score_softmax = self.self_attention(hidden['backbone'][b], prevs[b], conditions[b][len(prevs[b])], args)
                         batch_score_softmax[b] = score_softmax
 
                         # Init the decoder RNN
@@ -448,7 +458,8 @@ class MRNNModel(nn.Module):
                 for b in range(bsz):
                     h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    to_concat.append(self.get_new_output(h_backbone, h_prev, batch_score_softmax[b]))
+                    to_concat.append(self.get_new_output(
+                        h_backbone, h_prev, batch_score_softmax[b], args))
                 output += [torch.cat(to_concat, dim=0)]
 
             output = torch.stack(output, 1)
