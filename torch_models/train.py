@@ -171,7 +171,6 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
         if args.use_metaf:
-            ssm = source_slice[b][1]['ssm']
             batch_conditions = source_slice[b][1]['segment_sdm']
             # print source_slice[b][1]['segments']
             # print source_slice[b][1]['f']

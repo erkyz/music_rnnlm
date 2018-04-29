@@ -362,7 +362,9 @@ class MRNNModel(nn.Module):
             print softmax
         '''
         decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
-        score_softmax = torch.sum(torch.cat([scores[i]*softmax[i] for i in range(len(prevs))]), 0)
+        score_softmax = torch.sum(torch.cat(
+            [torch.mul(Variable(torch.FloatTensor([scores[i]]), requires_grad=False) ,softmax[i]) for i in range(len(prevs))]
+            ), 0)
         return decoder_h0, score_softmax
 
     # TODO implement this 
