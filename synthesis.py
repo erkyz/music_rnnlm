@@ -1,5 +1,5 @@
-import argparse
 import sys, os
+import argparse
 import shutil
 import glob
 import ast

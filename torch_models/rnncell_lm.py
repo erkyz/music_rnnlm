@@ -311,7 +311,6 @@ class MRNNModel(nn.Module):
 
         self.rnn_type = args.rnn_type
         self.nlayers = nlayers
-        self.sigmoid = nn.Sigmoid()
 
     def init_weights(self):
         self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())

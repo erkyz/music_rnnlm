@@ -160,17 +160,17 @@ def get_note_ssm_future(melody, args, bnw=False):
     return ssm, rawDiffs
 
 
-def get_measure_sdm(melody, segments, args):
+def get_measure_sdm(melody, segments):
     ''' melody is a PDV melody '''
     ''' segments is a list of tuples of indices of where segments begin and end'''
-    differences = map(diff, zip([('C0', 0)] + melody[:-1], melody))
-    rawDiffs = map(lambda x: x[0], differences)
+    differences = [map(diff, zip(melody[i:j-1], melody[i+1:j])) for i, j in segments]
+    rawDiffs = [map(lambda x: x[0], segdiffs) for segdiffs in differences]
     
     ssm = np.zeros([len(segments), len(segments)]) 
-    for i, (i1, j1) in enumerate(segments):
-        for t, (i2, j2) in enumerate(segments[i:]):
+    for i in range(len(segments)):
+        for t in range(len(segments[i:])):
             j = t + i
-            ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i1:j1], rawDiffs[i2:j2]) 
+            ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i], rawDiffs[j]) 
     return ssm
 
 

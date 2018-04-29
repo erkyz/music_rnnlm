@@ -173,15 +173,13 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
         if args.use_metaf:
             ssm = source_slice[b][1]['ssm']
             batch_conditions = source_slice[b][1]['segment_sdm']
-            print source_slice[b][1]['segments']
-            print source_slice[b][1]['origs']
+            # print source_slice[b][1]['segments']
             # print source_slice[b][1]['f']
             # print ssm
-            print maxlen
+            # print maxlen
         elif args.vanilla_ckpt == '':
-            melody = [sv.i2e[0][i].original for i in mel_idxs][1:] # remove START
-            args.window = source_slice[b][1] # TODO
-            ssm, _ = similarity.get_note_ssm_future(melody, args, bnw=True)
+            pass
+            # TODO other similarity measures.
         else:
             ssm = similarity.get_rnn_ssm(args, sv, vanilla_model, [mel_idxs])
         '''
