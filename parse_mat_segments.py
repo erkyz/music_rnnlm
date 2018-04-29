@@ -1,18 +1,79 @@
 # Parse the matlab-miditoolbox-created segments in a dataset
-# Save to new metas.p file
+# Save to new meta.p file
 
+import sys
 import pickle
+sys.path.insert(0, 'torch_models')
+import similarity, util
+import music21
 
-d = 'music_data/ashover/test/'
+d = 'music_data/CMaj_Nottingham/test/'
 
 metas = {}
 with open(d + 'segments.txt') as segs:
     for l in segs:
         if l[0] != '1':
             f = l[:-1]
-        else:
+
+        print (d+f)
+        skip_song = False
+        out = []
+        score = music21.converter.parse(d + f)
+        time_signature = util.get_ts(score)
+        limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
+        section_progress = 0
+        note_num = 0
+        measure_starting_idxs = [0]
+        if len(score) == 1:
+            no_chords.append(f)
+            continue
+
+        '''
+        pickup_dur = 0
+        if len(score) == 1:
+            no_chords.append(f)
+            continue
+        if type(score[1][2]) is music21.note.Rest:
+            pickup_dur = score[1][2].duration.quarterLength
+        print pickup_dur
+         
+        on_pickup = True
+        time_signature_encountered = False
+        for e in score[0]: # this is the melody Part
+            # Throw out the pickup.
+            if on_pickup and type(e) in {music21.note.Note, music21.note.Rest}:
+                if section_progress < pickup_dur:
+                    section_progress += e.duration.quarterLength
+                    continue
+                elif section_progress == pickup_dur:
+                    section_progress = 0
+                    on_pickup = False
+        '''
+        
+        for e in score[0]: # this is the melody Part
+            if type(e) is music21.note.Note or type(e) is music21.note.Rest:
+                duration = e.duration.quarterLength
+                name = e.nameWithOctave if type(e) is music21.note.Note else 'rest'
+                if type(e) is music21.note.Note:
+                    out.append((e.nameWithOctave, e.duration.quarterLength))
+                elif type(e) is music21.note.Rest:
+                    out.append((e.name, e.duration.quarterLength))
+                if section_progress + duration > limit:
+                    skip_song = True
+                    break
+                else:
+                    # add_to_section(section, name, duration)
+                    section_progress += duration 
+                note_num += 1
+
+        if not skip_song:
             starts = [int(x)-1 for x in l.split(' ')[:-1]]
-            ends = starts[1:] + [-1] # last end shouldn't matter.
+            ends = starts[1:] + [-1] # last end is -1
+            segments = list(zip(starts, ends))
+            print out
+            segment_sdm = similarity.get_measure_sdm(out, segments)
+            print f
+            print segment_sdm
             metas[f] = {'segments': list(zip(starts, ends)), 'f': f}
 
 pickle.dump(metas, open(d + 'meta.p', 'wb'))

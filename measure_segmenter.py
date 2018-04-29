@@ -25,6 +25,7 @@ for i, d in enumerate(['test', 'valid', 'train']):
     metas = {}
     for f in glob.glob(args.data + d + '/' + "*.mid"):
         print f
+        skip_song = False
         out = []
         score = music21.converter.parse(f)
         time_signature = util.get_ts(score)
@@ -76,6 +77,7 @@ for i, d in enumerate(['test', 'valid', 'train']):
                     out.append((e.name, e.duration.quarterLength))
                 if section_progress + duration > limit:
                     ties.append(f)
+                    skip_song = True
                     break
                     '''
                     cut_duration = limit - section_progress
@@ -89,12 +91,14 @@ for i, d in enumerate(['test', 'valid', 'train']):
                     # add_to_section(section, name, duration)
                     section_progress += duration 
                 note_num += 1
-        print measure_starting_idxs
-        ends = measure_starting_idxs[1:] + [note_num+1]
-        basename = os.path.basename(f) 
-        segments = list(zip(measure_starting_idxs, ends))
-        segment_sdm = similarity.get_measure_sdm(out, segments)
-        metas[basename] = {'segments': segments, 'f': basename, 'segment_sdm': segment_sdm}
+        
+        if not skip_song:
+            print measure_starting_idxs
+            ends = measure_starting_idxs[1:] + [note_num+1]
+            basename = os.path.basename(f) 
+            segments = list(zip(measure_starting_idxs, ends))
+            segment_sdm = similarity.get_measure_sdm(out, segments)
+            metas[basename] = {'segments': segments, 'f': basename, 'segment_sdm': segment_sdm}
 
     pickle.dump(metas, open(args.data + d + '/meta.p', 'wb'))
 
