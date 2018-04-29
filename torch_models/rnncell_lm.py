@@ -352,7 +352,7 @@ class MRNNModel(nn.Module):
         vs = []
         for i, prev_enc in enumerate(prevs):
             # Get the similarity score of the ith previous segment
-            s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False) 
+            s = Variable(torch.cuda.FloatTensor([scores[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
             x = self.fc2(self.fc1(x))
@@ -394,7 +394,7 @@ class MRNNModel(nn.Module):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             emb_start = self.emb_encoders[0](inputs[0][0][0])
             rnn_input = torch.cat(embs, dim=2)
-            batch_score_softmax = [Variable(torch.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
+            batch_score_softmax = [Variable(torch.cuda.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.

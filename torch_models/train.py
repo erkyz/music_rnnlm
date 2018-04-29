@@ -308,7 +308,6 @@ if args.mode == 'train':
     elif args.arch == "mrnn":
         model = rnncell_lm.MRNNModel(args)
         args.out2 = True
-        segmenter = rnncell_lm.RNNCellModel(args)
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
     elif args.arch == "vine":
@@ -446,10 +445,8 @@ def train():
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         # hidden = repackage_hidden(hidden)
         hidden = model.init_hidden(args.batch_size)
-        hidden2 = segmenter.init_hidden(args.batch_size)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
-        segs_seq, _ = segmenter(data, hidden2, args)
         outputs, hidden = model(data, hidden, args)
         '''
         print data["targets"][0]
