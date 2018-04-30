@@ -116,7 +116,7 @@ parser.add_argument('--cuda', action='store_true',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 args = parser.parse_args()
-args.use_metaf = (args.metaf == True)
+args.use_metaf = (args.metaf != '')
 
 print args
 
@@ -377,7 +377,7 @@ def evaluate_ssm():
     # Turn on evaluation mode which disables dropout.
     model.eval()
     path = args.path + 'train/'
-    meta_dicts = util.get_meta_dicts(path)
+    meta_dicts = util.get_meta_dicts(path, args)
     num_total_repeats = 0
     total_repeat_ed = 0
     for songf, info in random.sample(meta_dicts.items(), NUM_TO_GENERATE):
@@ -547,9 +547,9 @@ if args.mode == 'train':
 elif args.mode == 'generate':
     for i in range(args.num_out):
         torch.manual_seed(i*args.seed)
-        path = args.path + 'train'
+        path = args.path + 'train/'
         if args.use_metaf:
-            meta_dicts = util.get_meta_dicts(path)
+            meta_dicts = util.get_meta_dicts(path, args)
             meta_dict = meta_dicts[os.path.basename(args.condition_piece)]
         else:
             meta_dict = None

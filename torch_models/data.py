@@ -25,13 +25,13 @@ class Corpus(object):
             for c in range(self.vocab.num_channels):
                 if args.use_metaf:
                     basename = os.path.basename(f)
-                    meta_dicts = util.get_meta_dicts(path)
+                    meta_dicts = util.get_meta_dicts(path, args)
                     if basename not in meta_dicts:
                         print "Skipping", basename
                         continue
                     meta_dict = meta_dicts[basename]
                 else:
-                    meta_dict['f'] = f
+                    meta_dict = {'f': f}
 
                 if args.synth_data:
                     melody = [('start', 'start')] + [(str(n),d) for n, d in meta_dict['origs']] + [('end', 'end')]
@@ -84,9 +84,9 @@ class Corpus(object):
         corpus.vocab = vocab
         corpus.vocab_fname = vocab_fname
         corpus.my_fname = corpus_fname
-        corpus.trains = corpus.eventize(os.path.join(args.path, 'train'), args)
-        corpus.valids = corpus.eventize(os.path.join(args.path, 'valid'), args)
-        corpus.tests = corpus.eventize(os.path.join(args.path, 'test'), args)
+        corpus.trains = corpus.eventize(os.path.join(args.path, 'train/'), args)
+        corpus.valids = corpus.eventize(os.path.join(args.path, 'valid/'), args)
+        corpus.tests = corpus.eventize(os.path.join(args.path, 'test/'), args)
 
         print "Saving new Corpus", corpus_fname
         corpus.save()
