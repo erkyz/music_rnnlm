@@ -296,6 +296,16 @@ class MRNNModel(nn.Module):
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
         self.fc4 = nn.Linear(self.nhid/2, 1)
+        self.b1 = nn.Parameter(torch.FloatTensor([0]).zero_())
+        self.b2 = nn.Parameter(torch.FloatTensor([0]).zero_())
+        self.b3 = nn.Parameter(torch.FloatTensor([0]).zero_())
+        self.b4 = nn.Parameter(torch.FloatTensor([0]).zero_())
+        if args.cuda:
+            self.b1.cuda()
+            self.b2.cuda()
+            self.b3.cuda()
+            self.b4.cuda()
+
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
         # For backbone RNN
@@ -312,9 +322,6 @@ class MRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.A)
-        self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.B)
         self.default_enc = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
         for i in range(self.num_channels):
@@ -339,7 +346,8 @@ class MRNNModel(nn.Module):
         x = score_softmax
         # x = F.relu(self.fc3(x))
         # x = F.relu(self.fc4(x))
-        x = self.fc4(F.relu(self.fc3(x)))
+        x = F.relu(self.fc3(x)) #  + self.b)
+        x = self.fc4(x)
         alpha = F.sigmoid(x)
         if random.random() < 0.01:
             print score_softmax.data[0], alpha.data[0]
@@ -356,7 +364,8 @@ class MRNNModel(nn.Module):
                 s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
-            x = self.fc2(self.fc1(x))
+            x = self.fc1(x)
+            x = self.fc2(x)
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
         '''
