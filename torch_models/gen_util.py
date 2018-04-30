@@ -8,7 +8,10 @@ import similarity, util
 def get_events(sv, args, midf, meta_dict):
     channel_event_idxs = [[] for _ in range(sv.num_channels)]
     for channel in range(sv.num_channels):
-        origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel) if not args.use_metaf else ([sv.special_events['start'].original] + meta_dict['origs'] + [sv.special_events['end'].original], 0)
+        if args.synth_data:
+            origs = [sv.special_events['start'].original] + meta_dict['origs'] + [sv.special_events['end'].original]
+        else:
+            origs, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=args.measure_tokens, channel=channel)
         mel_idxs = [sv.orig2e[channel][o].i for o in origs]
         for idx in mel_idxs:
             channel_event_idxs[channel].append(idx)

@@ -346,23 +346,24 @@ if args.mode not in ['get_rnn_ssms']:
 # Get the data
 ###############################################################################
 
-''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-f = util.get_datadumpf(args)
-if os.path.isfile(f):
-    print "Load existing train data", f
-    train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
-else:
-    print "Begin batchify"
-    t = time.time()
-    train_data = batchify(corpus.trains, args.batch_size, sv, vanilla_model)
-    valid_data = batchify(corpus.valids, args.batch_size, sv, vanilla_model)
-    test_data = batchify(corpus.tests, args.batch_size, sv, vanilla_model)
-    print "Saving train data to", f, "time elapsed", time.time() - t
-    pickle.dump((train_data, valid_data, test_data), open(f, 'wb'))
+if args.mode == 'train':
+    ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
+    f = util.get_datadumpf(args)
+    if os.path.isfile(f):
+        print "Load existing train data", f
+        train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
+    else:
+        print "Begin batchify"
+        t = time.time()
+        train_data = batchify(corpus.trains, args.batch_size, sv, vanilla_model)
+        valid_data = batchify(corpus.valids, args.batch_size, sv, vanilla_model)
+        test_data = batchify(corpus.tests, args.batch_size, sv, vanilla_model)
+        print "Saving train data to", f, "time elapsed", time.time() - t
+        pickle.dump((train_data, valid_data, test_data), open(f, 'wb'))
 
-train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
-valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
-test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
+    train_mb_indices = range(0, int(len(corpus.trains[0])/args.batch_size))
+    valid_mb_indices = range(0, int(len(corpus.valids[0])/args.batch_size))
+    test_mb_indices = range(0, int(len(corpus.tests[0])/args.batch_size))
 
 ###############################################################################
 # Training code
@@ -552,11 +553,10 @@ elif args.mode == 'generate':
             meta_dict = None
 
         conditions = []
+        # Note: |events| is only for conditions
+        events = gen_util.get_events(sv, args, args.condition_piece, meta_dict)
         if args.arch in util.CONDITIONALS:
-            events, conditions = gen_util.get_events_and_conditions(
-                    sv, args, vanilla_model, meta_dict)
-        else:
-            events = gen_util.get_events(sv, args, args.condition_piece)
+            conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
         generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab, 
                 vanilla_model, end=True)
