@@ -37,7 +37,8 @@ parser.add_argument('--save', type=str, default="",
                     help='override default model save filename')
 parser.add_argument('--train_info_out', type=str, default="test.csv",
                     help='where to save train info')
-parser.add_argument('--use_metaf', action='store_true')
+parser.add_argument('--metaf', type=str, default="",
+                    help='name of metadata file, e.g. "meta.p"')
 parser.add_argument('--synth_data', action='store_true')
 
 # RNN params
@@ -115,6 +116,7 @@ parser.add_argument('--cuda', action='store_true',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 args = parser.parse_args()
+args.use_metaf = (args.metaf == True)
 
 print args
 
