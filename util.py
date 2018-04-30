@@ -44,7 +44,7 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
 
 def get_meta_dicts(path):
     if os.path.exists(path):
-        return pickle.load(open(path + '/meta.p', 'rb'))
+        return pickle.load(open(path + args.metaf, 'rb'))
     else:
         return None
 

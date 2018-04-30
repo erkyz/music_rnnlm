@@ -1,5 +1,5 @@
 addpath(genpath('../miditoolbox'));
-path = 'music_data/ashover/test/';
+path = 'music_data/CMaj_Nottingham/valid/';
 files = dir(strcat(path, '*.mid'));
 thres = 0.21; % empirically reached this.
 max_ratio = 0.2; % one in five.
