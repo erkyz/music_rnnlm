@@ -342,8 +342,9 @@ class MRNNModel(nn.Module):
     def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
-        # x = self.fc3(x) #  + self.b)
-        x = F.relu(self.fc3(x) + self.b3)
+        # x = F.relu(self.fc3(x))
+        # x = F.relu(self.fc4(x))
+        x = self.fc3(x) + self.b3
         x = self.fc4(x) + self.b4
         alpha = F.sigmoid(x)
         if random.random() < 0.01:
@@ -406,11 +407,9 @@ class MRNNModel(nn.Module):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             emb_start = self.emb_encoders[0](inputs[0][0][0])
             rnn_input = torch.cat(embs, dim=2)
-            if args.cuda:
-                batch_score_softmax = [Variable(torch.cuda.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
-            else:
-                batch_score_softmax = [Variable(torch.FloatTensor([10]), requires_grad=False) for b in range(bsz)]
-
+            # Similarity score softmax to use in the current measure.
+            # This is not used for the first measure.
+            batch_score_softmax = [None for b in range(bsz)]
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
@@ -463,8 +462,13 @@ class MRNNModel(nn.Module):
                 for b in range(bsz):
                     h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    to_concat.append(self.get_new_output(
-                        h_backbone, h_prev, batch_score_softmax[b], args))
+                    if t < beg_idxs[b][0]:
+                        # Do not use decoder in first measure.
+                        to_concat.append(h_backbone)
+                    else:
+                        to_concat.append(self.get_new_output(
+                            h_backbone, h_prev, batch_score_softmax[b], args))
+
                 output += [torch.cat(to_concat, dim=0)]
 
             output = torch.stack(output, 1)
