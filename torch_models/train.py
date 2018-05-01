@@ -307,7 +307,8 @@ if args.mode == 'train':
         model = rnncell_lm.ERNNModel(args) 
     elif args.arch == "mrnn":
         model = rnncell_lm.MRNNModel(args)
-        args.out2 = True
+    elif args.arch == "attn":
+        model = rnncell_lm.AttentionRNNModel(args)
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
     elif args.arch == "vine":
