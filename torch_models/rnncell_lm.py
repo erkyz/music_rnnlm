@@ -462,8 +462,8 @@ class MRNNModel(nn.Module):
                 for b in range(bsz):
                     h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    if t < beg_idxs[b][0]:
-                        # Do not use decoder in first measure.
+                    if t < beg_idxs[b][1]:
+                        # Do not use decoder in first measure. beg_idxs[b][0] is 0.
                         to_concat.append(h_backbone)
                     else:
                         to_concat.append(self.get_new_output(
