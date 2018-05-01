@@ -363,7 +363,7 @@ class MRNNModel(nn.Module):
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
             x = self.fc1(x) + self.b1
-            x = self.fc2(x) + self.b2
+            x = F.tanh(self.fc2(x) + self.b2)
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
         '''
@@ -462,7 +462,7 @@ class MRNNModel(nn.Module):
                 for b in range(bsz):
                     h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    if t < beg_idxs[b][1]:
+                    if len(beg_idxs[b]) > 1 and t < beg_idxs[b][1]:
                         # Do not use decoder in first measure. beg_idxs[b][0] is 0.
                         to_concat.append(h_backbone)
                     else:

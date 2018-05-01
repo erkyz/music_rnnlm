@@ -39,13 +39,12 @@ EMSIZE=200
 DROP=0.5
 NL=1
 
-
 EPOCHS=25
 NOTT="../music_data/CMaj_Nottingham/"
 TMP_PREFIX="CMaj_Nottingham_correct"
-SAVE='../tmp/mrnn_bias.pt'
+SAVE='../tmp/mrnn_prefinal.pt'
 METAF="meta.p"
-OUTF="MRNN_pretrain"
+OUTF="MRNN_prefinal"
 LR=0.002
 VOCAB_PATHS=\[\"$NOTT\"\]
 
