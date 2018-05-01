@@ -322,8 +322,6 @@ class MRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        nn.init.xavier_normal(self.B)
-        self.default_enc = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.emb_encoders[i].weight.data)
             nn.init.xavier_normal(self.prev_emb_encoders[i].weight.data)
@@ -344,10 +342,9 @@ class MRNNModel(nn.Module):
     def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
-        # x = F.relu(self.fc3(x))
-        # x = F.relu(self.fc4(x))
-        x = F.relu(self.fc3(x)) #  + self.b)
-        x = self.fc4(x)
+        # x = self.fc3(x) #  + self.b)
+        x = F.relu(self.fc3(x) + self.b3)
+        x = self.fc4(x) + self.b4
         alpha = F.sigmoid(x)
         if random.random() < 0.01:
             print score_softmax.data[0], alpha.data[0]
@@ -364,8 +361,8 @@ class MRNNModel(nn.Module):
                 s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
-            x = self.fc1(x)
-            x = self.fc2(x)
+            x = self.fc1(x) + self.b1
+            x = self.fc2(x) + self.b2
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
         '''

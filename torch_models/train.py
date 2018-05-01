@@ -437,9 +437,6 @@ def train():
     ntokens = corpus.vocab.sizes
     hidden = model.init_hidden(args.batch_size)
     random.shuffle(train_mb_indices)
-    if args.arch in util.CONDITIONALS:
-        print torch.sum(model.A).data[0]
-        print torch.sum(model.B).data[0]
     for batch in train_mb_indices:
         data = get_batch_variables(train_data, batch)
         # Starting each batch, we detach the hidden state from how it was previously produced.
