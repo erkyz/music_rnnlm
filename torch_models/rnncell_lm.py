@@ -311,8 +311,6 @@ class MRNNModel(nn.Module):
     def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
-        # x = F.relu(self.fc3(x))
-        # x = F.relu(self.fc4(x))
         x = self.fc3(x) + self.b3
         x = self.fc4(x) + self.b4
         alpha = F.sigmoid(x)
@@ -427,7 +425,7 @@ class MRNNModel(nn.Module):
                 for b in range(bsz):
                     h_backbone = hidden['backbone'][b].unsqueeze(0)
                     h_prev = hidden['prev_dec'][b]
-                    if len(beg_idxs[b]) > 1 and t < beg_idxs[b][1]:
+                    if len(beg_idxs[b]) <= 1 or t < beg_idxs[b][1]:
                         # Do not use decoder in first measure. beg_idxs[b][0] is 0.
                         to_concat.append(h_backbone)
                     else:
