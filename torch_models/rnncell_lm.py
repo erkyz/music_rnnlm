@@ -294,8 +294,8 @@ class MRNNModel(nn.Module):
     def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
-        x = self.fc3(x) + self.b3
-        x = self.fc4(x) + self.b4
+        x = self.fc3(x) 
+        x = self.fc4(x)
         alpha = F.sigmoid(x)
         if random.random() < 0.01:
             print score_softmax.data[0], alpha.data[0]

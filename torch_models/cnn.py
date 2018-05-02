@@ -17,7 +17,7 @@ class CNN(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2))
-        self.fc = nn.Linear(args.batch_size*args.batch_size*32, args.nhid)
+        self.fc = nn.Linear(4*4*32, args.nhid)
         
     def forward(self, x, args):
         # TODO pad to the same length.

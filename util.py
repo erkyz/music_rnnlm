@@ -53,7 +53,7 @@ def get_datadumpf(args, extra=''):
     f = tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
     if not args.copy_earliest:
         f += '_mostrecent'
-    if args.arch in CONDITIONALS:
+    if args.conditional_model:
         f += '_condmod'
     if args.arch == 'xrnn':
         f += '_xrnn'

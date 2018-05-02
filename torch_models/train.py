@@ -402,10 +402,10 @@ def evaluate_ssm():
         if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
-        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
-                vanilla_model)
         print [e.i for e in generated]
         print conditions
+        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
+                vanilla_model)
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'])
