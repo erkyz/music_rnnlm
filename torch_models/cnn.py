@@ -19,13 +19,16 @@ class CNN(nn.Module):
             nn.MaxPool2d(2))
         self.fc = nn.Linear(args.batch_size*args.batch_size*32, args.nhid)
         
-    def forward(self, x):
+    def forward(self, x, args):
         # TODO pad to the same length.
 
         # This is based on the fact that our inputs are arrays of numpy arrays (bad)
         max_size = max([y.shape[0] for y in x])
         x = [np.pad(y, (0, max_size - y.shape[0]), 'constant', constant_values=0) for y in x]
-        x = Variable(torch.FloatTensor(x).unsqueeze(1), requires_grad=False)
+        if args.cuda:
+            x = Variable(torch.cuda.FloatTensor(x).unsqueeze(1), requires_grad=False)
+        else:
+            x = Variable(torch.FloatTensor(x).unsqueeze(1), requires_grad=False)
         out = self.layer1(x)
         out = self.layer2(out)
         out = out.view(out.size(0), -1)

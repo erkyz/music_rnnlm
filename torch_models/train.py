@@ -456,7 +456,7 @@ def train():
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         # hidden = repackage_hidden(hidden)
         if args.cnn_encoder:
-            hidden = cnn(data["conditions"][0])
+            hidden = cnn(data["conditions"][0], args)
         else:
             hidden = model.init_hidden(args.batch_size)
         if args.arch == "hrnn":       
