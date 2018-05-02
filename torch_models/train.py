@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import util
 import data
 import rnnlm, rnncell_lm, hrnnlm
+import cnn
 import similarity
 import get_hiddens, old_generate, gen_util
 
@@ -40,6 +41,10 @@ parser.add_argument('--train_info_out', type=str, default="test.csv",
 parser.add_argument('--metaf', type=str, default="",
                     help='name of metadata file, e.g. "meta.p"')
 parser.add_argument('--synth_data', action='store_true')
+
+# CNN params
+parser.add_argument('--cnn_encoder', action='store_true',
+                    help='use a CNN to encode the SSM that the RNN decodes')
 
 # RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
@@ -117,6 +122,7 @@ parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 args = parser.parse_args()
 args.use_metaf = (args.metaf != '')
+args.conditional_model = args.arch in util.CONDITIONALS or args.cnn_encoder
 
 print args
 
@@ -227,7 +233,7 @@ def get_batch(source, batch, bsz, sv):
 
 def batchify(source, bsz, sv, vanilla_model):
     batch_data = {"data": [], "targets": [], "metadata": []}
-    if args.arch in util.CONDITIONALS:
+    if args.conditional_model:
         batch_data["conditions"] = []
     for channel in range(len(source)):
         channel_batches = []
@@ -236,7 +242,7 @@ def batchify(source, bsz, sv, vanilla_model):
         channel_conditions = []
         for batch_idx in range(int(len(source[channel])/bsz)):
             # For each batch, create a Tensor
-            if args.arch in util.CONDITIONALS:
+            if args.conditional_model:
                 data, conditions, target, = \
                     get_batch_with_conditions(source[channel], batch_idx, bsz, sv, vanilla_model)
                 channel_conditions.append(conditions)
@@ -251,7 +257,7 @@ def batchify(source, bsz, sv, vanilla_model):
         batch_data["data"].append(channel_batches)
         batch_data["targets"].append(channel_targets)
         batch_data["metadata"].append(channel_metadata)
-        if args.arch in util.CONDITIONALS:
+        if args.conditional_model:
             batch_data["conditions"].append(channel_conditions)
     return batch_data
 
@@ -316,15 +322,21 @@ if args.mode == 'train':
     else:
         model = rnnlm.RNNModel(args)
     
-    if args.arch in util.CONDITIONALS:
+    if args.conditional_model:
         if args.vanilla_ckpt != '':
             with open(args.vanilla_ckpt, 'rb') as f:
                 vanilla_model = torch.load(f)
                 # vanilla_model.eval()
 
+    if args.cnn_encoder:
+        cnn = cnn.CNN(args)
+        if args.cuda:
+            cnn.cuda()
+
     sigmoid = nn.Sigmoid()
     criterion = nn.CrossEntropyLoss(ignore_index=PADDING)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    params = list(model.parameters()) + list(cnn.parameters()) if args.cnn_encoder else list(model.parameters())
+    optimizer = torch.optim.Adam(params, lr=args.lr)
     print model
 
 elif args.mode in ['get_hiddens', 'generate']:
@@ -387,7 +399,7 @@ def evaluate_ssm():
 
         conditions = []
         events = gen_util.get_events(sv, args, args.condition_piece, meta_dict)
-        if args.arch in util.CONDITIONALS:
+        if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
         generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
@@ -443,7 +455,10 @@ def train():
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         # hidden = repackage_hidden(hidden)
-        hidden = model.init_hidden(args.batch_size)
+        if args.cnn_encoder:
+            hidden = cnn(data["conditions"][0])
+        else:
+            hidden = model.init_hidden(args.batch_size)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden, args)
@@ -555,7 +570,7 @@ elif args.mode == 'generate':
         conditions = []
         # Note: |events| is only for conditions
         events = gen_util.get_events(sv, args, args.condition_piece, meta_dict)
-        if args.arch in util.CONDITIONALS:
+        if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
         generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab, 

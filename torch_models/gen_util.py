@@ -41,12 +41,12 @@ def make_data_dict(args, sv):
     '''
     data = {}
     data["data"] = [Variable(torch.FloatTensor(1, 1).zero_().long() + sv.special_events["start"].i, volatile=True)]
-    if args.arch in util.CONDITIONALS:
+    if args.conditional_model:
         data["conditions"] = [Variable(torch.LongTensor(1, 1).zero_(), volatile=True) for c in range(sv.num_channels)] 
     if args.cuda:
         for c in range(sv.num_channels):
             data["data"][c].data = data["data"][c].data.cuda()
-            if args.arch in util.CONDITIONALS:
+            if args.conditional_model:
                 data["conditions"][c].data = data["conditions"][c].data.cuda()
     return data
 

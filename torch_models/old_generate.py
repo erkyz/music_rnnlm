@@ -43,7 +43,7 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
 
         if args.arch == "hrnn":
             outputs_t, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-        elif args.arch in util.CONDITIONALS:
+        elif args.conditional_model:
             # prevs modified in place
             outputs_t, hidden = model(gen_data, hidden, args, prevs, t)
         else:
