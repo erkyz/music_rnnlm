@@ -13,15 +13,16 @@ NO_INFO_EVENT_IDX = 3
 
 def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None, end=False):
     model.eval()
-    hidden = model.init_hidden(1)
+    bsz = 1
+    hidden = model.init_hidden(bsz)
     if args.arch == 'prnn':
-        prevs = [hidden["parallel"]]
+        prev_data = [hidden["parallel"]]
     elif args.arch == 'mrnn':
-        prevs = [[]] 
+        prev_data = {'score_softmax': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
     elif args.arch == 'ernn':
-        prevs = [] 
+        prev_data = [] 
     else: # XRNN
-        prevs = [hidden]
+        prev_data = [hidden]
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["conditions"] = conditions
     gen_data["cuda"] = args.cuda
@@ -44,8 +45,8 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
         if args.arch == "hrnn":
             outputs_t, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
         elif args.conditional_model:
-            # prevs modified in place
-            outputs_t, hidden = model(gen_data, hidden, args, prevs, t)
+            # prev_data modified in place
+            outputs_t, hidden = model(gen_data, hidden, args, prev_data, t)
         else:
             outputs_t, hidden = model(gen_data, hidden, args)
         
