@@ -402,10 +402,10 @@ def evaluate_ssm():
         if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
+        print conditions
         generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
         print [e.i for e in generated]
-        print conditions
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'])
@@ -510,10 +510,10 @@ if args.mode == 'train':
         for epoch in range(1, args.epochs+1):
             args.epoch = epoch-1
             epoch_start_time = time.time()
-            train_loss = train()
             if args.synth_data:
                 gen_ED = evaluate_ssm()
                 print gen_ED
+            train_loss = train()
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
             print('-' * 89)

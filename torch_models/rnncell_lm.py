@@ -161,32 +161,32 @@ class AttentionRNNModel(nn.Module):
         backbone = Variable(weight.new(bsz, self.nhid).zero_())
         return {'backbone': backbone}
    
-    def get_self_attention_new_input(self, h_backbone, prevs, args):
+    def get_self_attention_new_input(self, h_backbone, prev_data, args):
         # self-attention over previous segment encodings
         vs = []
-        for i, prev_enc in enumerate(prevs):
+        for i, prev_enc in enumerate(prev_data):
             x = torch.cat([prev_enc.squeeze(), h_backbone], dim=1)
             x = self.fc1(x)
             x = F.tanh(self.fc2(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs, dim=1)) # bsz x t
         bsz = softmax.size(0)
-        # This is not fast, but prevs is a list for generate purposes (for now) 
+        # This is not fast, but prev_data is a list for generate purposes (for now) 
         att_prev_enc = sum([torch.cat(
-            [softmax[b][t]*prevs[t][b] for b in range(bsz)]) for t in range(len(prevs))])
+            [softmax[b][t]*prev_data[t][b] for b in range(bsz)]) for t in range(len(prev_data))])
         new_input = torch.cat([h_backbone, att_prev_enc.squeeze()], dim=1)
         return new_input
 
     # TODO implement this 
-    def forward_ss(self, data, hidden, args, prevs=None):
+    def forward_ss(self, data, hidden, args, prev_data=None):
          return 
 
-    def forward(self, data, hidden, args, prevs=None, curr_t=None):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         # hidden is a dict
-        # what we call "prevs" is not actually previous hidden states.
+        # what we call "prev_data" is not actually previous hidden states.
         train_mode = curr_t is None
         if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
+            return self.forward_ss(data, hidden, args, prev_data)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -201,7 +201,7 @@ class AttentionRNNModel(nn.Module):
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prevs = []
+                prev_data = []
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Note that t is input-indexed
                 if curr_t is not None: t = curr_t
@@ -213,8 +213,8 @@ class AttentionRNNModel(nn.Module):
                 # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
                 t_to_use = t if train_mode else 0
 
-                prevs.append(emb_t)
-                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prevs, args)
+                prev_data.append(emb_t)
+                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prev_data, args)
                 hidden['backbone'] = self.rnn(rnn_input_t, hidden['backbone'])
                 output += [hidden['backbone']]
 
@@ -294,47 +294,51 @@ class MRNNModel(nn.Module):
     def get_new_output(self, h_backbone, h_dec, score_softmax, args):
         # x = torch.cat([h_backbone.squeeze(), h_dec.squeeze(), score_softmax])
         x = score_softmax
-        x = self.fc3(x) + self.b3
-        x = self.fc4(x) + self.b4
+        x = self.fc3(x)
+        x = self.fc4(x)
         alpha = F.sigmoid(x)
         if random.random() < 0.01:
             print score_softmax.data[0], alpha.data[0]
         return alpha*h_dec + (1-alpha)*h_backbone
 
-    def self_attention(self, h_backbone, prevs, scores, args):
+    def self_attention(self, h_backbone, prev_encs, prev_weighted_score, args):
         # self-attention over previous segment encodings
         vs = []
-        for i, prev_enc in enumerate(prevs):
+        for i, prev_enc in enumerate(prev_encs):
             # Get the similarity score of the ith previous segment
             if args.cuda:
-                s = Variable(torch.cuda.FloatTensor([scores[i]]), requires_grad=False)
+                s = Variable(torch.cuda.FloatTensor([prev_weighted_score[i]]), requires_grad=False)
             else:
-                s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False)
+                s = Variable(torch.FloatTensor([prev_weighted_score[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
             x = self.fc1(x) 
             x = F.tanh(self.fc2(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
-        decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
+        decoder_h0 = torch.sum(
+                torch.cat(
+                    [prev_encs[i]*softmax[i] for i in range(len(prev_encs))]),
+                0).unsqueeze(0)
         score_softmax = torch.sum(torch.cat(
             [torch.mul(
-                Variable(torch.cuda.FloatTensor([scores[i]]) if args.cuda else torch.FloatTensor([scores[i]]), requires_grad=False),
+                Variable(torch.cuda.FloatTensor([prev_weighted_score[i]]) if args.cuda 
+                    else torch.FloatTensor([prev_weighted_score[i]]), requires_grad=False),
                 softmax[i]
-                ) for i in range(len(prevs))]
+                ) for i in range(len(prev_encs))]
             ), 0)
         return decoder_h0, score_softmax
 
     # TODO implement this 
-    def forward_ss(self, data, hidden, args, prevs=None):
+    def forward_ss(self, data, hidden, args, prev_data=None):
          return 
 
-    def forward(self, data, hidden, args, prevs=None, curr_t=None):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         # hidden is a dict
-        # what we call "prevs" is not actually previous hidden states.
+        # what we call "prev_data" is not actually previous hidden states.
         train_mode = curr_t is None
         if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
+            return self.forward_ss(data, hidden, args, prev_data)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -355,11 +359,10 @@ class MRNNModel(nn.Module):
             rnn_input = torch.cat(embs, dim=2)
             # Similarity score softmax to use in the current measure.
             # This is not used for the first measure.
-            batch_score_softmax = [None for b in range(bsz)]
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prevs = [[] for b in range(bsz)]
+                prev_data = {'score_softmax': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Note that t is input-indexed
                 if curr_t is not None: t = curr_t
@@ -367,7 +370,6 @@ class MRNNModel(nn.Module):
                 # the backbone RNN in the first measure. TODO magic number
                 # Encoding is based on input indexing, not outputs.
                 for b in range(bsz):
-
                     emb_t_b = emb_t.squeeze(1)[b].unsqueeze(0)
                     # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
                     t_to_use = t if train_mode else 0
@@ -380,14 +382,18 @@ class MRNNModel(nn.Module):
                                     emb_t_b_enc, hidden['prev_enc'][b])
 
                     if t in beg_idxs[b] and t != 0:
-                        # Add the prev measure encoding to prevs
-                        prevs[b].append(hidden['prev_enc'][b])
+                        # Add the prev measure encoding to prev_data
+                        prev_data['encs'][b].append(hidden['prev_enc'][b])
 
                         # Sets |score_softmax| to the score softmax that'll be
                         # used in the gating at _this_ measure. 
-                        # print conditions[b][len(prevs[b])]
-                        decoder_h0, score_softmax = self.self_attention(hidden['backbone'][b], prevs[b], conditions[b][len(prevs[b])], args)
-                        batch_score_softmax[b] = score_softmax
+                        # print conditions[b][len(prev_data[b])]
+                        decoder_h0, score_softmax = self.self_attention(
+                                hidden['backbone'][b],
+                                prev_data['encs'][b], 
+                                conditions[b][len(prev_data['encs'][b])],
+                                args)
+                        prev_data['score_softmax'][b] = score_softmax
 
                         # Init the decoder RNN
                         hidden['prev_dec'][b] = decoder_h0
@@ -413,7 +419,7 @@ class MRNNModel(nn.Module):
                         to_concat.append(h_backbone)
                     else:
                         to_concat.append(self.get_new_output(
-                            h_backbone, h_prev, batch_score_softmax[b], args))
+                            h_backbone, h_prev, prev_data['score_softmax'][b], args))
 
                 output += [torch.cat(to_concat, dim=0)]
 
@@ -483,7 +489,7 @@ class ERNNModel(nn.Module):
         else:
             return Variable(weight.new(bsz, self.nhid).zero_())
    
-    def get_new_output(self, hidden, prevs, conditions, batch_size, t, args):
+    def get_new_output(self, hidden, prev_data, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             # Sometimes, t is the length of conditions minus 1, because we could be
@@ -493,7 +499,7 @@ class ERNNModel(nn.Module):
             else:
                 prev_idx = conditions[b][t+1]
             use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 
-            prev = prevs[prev_idx][b] if use_prev else hidden[b]
+            prev = prev_data[prev_idx][b] if use_prev else hidden[b]
             to_concat.append(prev.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
@@ -505,15 +511,15 @@ class ERNNModel(nn.Module):
         return torch.cat(to_concat, dim=0)
 
     # TODO implement this for ERNN
-    def forward_ss(self, data, hidden, args, prevs=None):
+    def forward_ss(self, data, hidden, args, prev_data=None):
          return 
 
-    def forward(self, data, hidden, args, prevs=None, curr_t=None):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         # hidden is a dict
-        # what we call "prevs" is not actually previous hidden states.
-        train_mode = prevs is None
+        # what we call "prev_data" is not actually previous hidden states.
+        train_mode = prev_data is None
         if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
+            return self.forward_ss(data, hidden, args, prev_data)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -530,15 +536,15 @@ class ERNNModel(nn.Module):
             rnn_input = torch.cat(embs, dim=2)
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prevs = []
+                prev_data = []
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Encoding is based on input indexing, not outputs.
                 # In generate mode, this works by always appending t=0, which is at t=t
-                prevs.append(self.encode_batch_t(inputs, t))
+                prev_data.append(self.encode_batch_t(inputs, t))
                 if not train_mode: t = curr_t
                 hidden = self.rnn(emb_t.squeeze(1), hidden)
                 output += [self.get_new_output(
-                    hidden, prevs, conditions, batch_size, t, args)]
+                    hidden, prev_data, conditions, batch_size, t, args)]
             output = torch.stack(output, 1)
             output = self.drop(output)
 
@@ -558,9 +564,9 @@ class ERNNModel(nn.Module):
                         prev_idx = conditions[0][t+1]
                     w = 0
                     use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-                    out = prevs[prev_idx]
+                    out = prev_data[prev_idx]
                     if use_prev:
-                        # print prevs, t, prev_idx+w, out
+                        # print prev_data, t, prev_idx+w, out
                         for i in range(41):
                             decs[0][0,t,i].data.zero_()
                         decs[0][0,t,out].data.add_(1)
@@ -633,7 +639,7 @@ class PRNNModel(nn.Module):
             parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
         return {'main': main_hidden, 'parallel': parallel_hidden}
     
-    def get_new_h_t(self, curr_h, prevs, conditions, batch_size, t, args):
+    def get_new_h_t(self, curr_h, prev_data, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             if args.baseline:
@@ -642,7 +648,7 @@ class PRNNModel(nn.Module):
                 prev_idx = conditions[b][t]
                 w = 1
                 use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-                prev = prevs[prev_idx+w][b] if use_prev else self.default_h
+                prev = prev_data[prev_idx+w][b] if use_prev else self.default_h
             l = torch.matmul(self.A, curr_h[b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
@@ -650,17 +656,17 @@ class PRNNModel(nn.Module):
 
 
     # TODO implement this for PRNN
-    def forward_ss(self, data, hidden, args, prevs=None):
+    def forward_ss(self, data, hidden, args, prev_data=None):
          return 
 
-    def forward(self, data, hidden, args, prevs=None, curr_t=None):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         # hidden is a dict
         if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
+            return self.forward_ss(data, hidden, args, prev_data)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
-            train_mode = prevs is None
+            train_mode = prev_data is None
             # data["conditions"] is a list of (bsz,seqlen)
             conditions = data["conditions"][0].data.tolist() 
             output = []
@@ -669,21 +675,21 @@ class PRNNModel(nn.Module):
             for c in range(self.num_channels):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             rnn_input = torch.cat(embs, dim=2)
-            if prevs is None:
+            if prev_data is None:
                 # Train mode
-                prevs = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
+                prev_data = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 main_h = hidden["main"]
                 parallel_h = hidden["parallel"]
                 curr_main_h = main_h[0] if self.is_lstm() else main_h
-                new_h_t = self.get_new_h_t(curr_main_h, prevs, conditions, batch_size, t, args)
+                new_h_t = self.get_new_h_t(curr_main_h, prev_data, conditions, batch_size, t, args)
                 if self.is_lstm():
                     hidden["main"] = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
                     hidden["parallel"] = self.parallel_rnn(emb_t.squeeze(1), parallel_h)
                 else:
                     hidden["main"] = self.rnn(emb_t.squeeze(1), new_h_t)
                     hidden["parallel"] = self.rnn(emb_t.squeeze(1), parallel_h)
-                prevs.append(parallel_h[0] if self.is_lstm() else parallel_h)
+                prev_data.append(parallel_h[0] if self.is_lstm() else parallel_h)
                 output += [hidden["main"][0] if self.is_lstm() else hidden["main"]]
             output = torch.stack(output, 1)
             output = self.drop(output)
@@ -739,7 +745,7 @@ class VineRNNModel(nn.Module):
             nn.init.xavier_normal(self.emb_decoders[i].weight.data)
             self.emb_decoders[i].bias.data.fill_(0)
 
-    def forward(self, data, hidden, prevs=None):
+    def forward(self, data, hidden, prev_data=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
@@ -754,16 +760,16 @@ class VineRNNModel(nn.Module):
         for c in range(self.num_channels):
             embs.append(self.drop(self.emb_encoders[c](inputs[c])))
         rnn_input = torch.cat(embs, dim=2)
-        if prevs is None:
-            prevs = [hidden]
+        if prev_data is None:
+            prev_data = [hidden]
         for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
             to_cat = []
             for b in range(batch_size):
                 # TODO make this work for LSTMs
-                to_cat.append(torch.unsqueeze(prevs[conditions[b][t]][b], 0))
+                to_cat.append(torch.unsqueeze(prev_data[conditions[b][t]][b], 0))
             new_h = torch.cat(to_cat, dim=0)
             hidden = self.rnn(emb_t.squeeze(1), new_h)
-            prevs.append(hidden)
+            prev_data.append(hidden)
             output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
         output = torch.stack(output, 1)
         output = self.drop(output)
@@ -773,7 +779,7 @@ class VineRNNModel(nn.Module):
             decoded = self.emb_decoders[i](
                 output.view(output.size(0)*output.size(1), output.size(2)))
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-        return decs, prevs[-1]
+        return decs, prev_data[-1]
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -841,20 +847,20 @@ class XRNNModel(nn.Module):
         else:
             return Variable(weight.new(bsz, self.nhid).zero_())
 
-    def get_new_h_t(self, prevs, conditions, batch_size, t, args):
+    def get_new_h_t(self, prev_data, conditions, batch_size, t, args):
         to_concat = []
         for b in range(batch_size):
             prev_idx = conditions[b][t]
-            # prev = prevs[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
-            prev = prevs[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
+            # prev = prev_data[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
+            prev = prev_data[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
             # prev = self.default_h
-            l = torch.matmul(self.A, prevs[-1][b])
+            l = torch.matmul(self.A, prev_data[-1][b])
             r = torch.matmul(self.B, prev)
             to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
         return torch.cat(to_concat, dim=0)
 
 
-    def forward_ss(self, data, hidden, args, prevs=None):
+    def forward_ss(self, data, hidden, args, prev_data=None):
         # linear annealing 
         prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
 
@@ -863,9 +869,9 @@ class XRNNModel(nn.Module):
         # data["conditions"] is a list of (bsz,seqlen)
         conditions = data["conditions"][0].data.tolist() # TODO
         batch_size = inputs[0].size(0)
-        if prevs is None:
+        if prev_data is None:
             # Train mode
-            prevs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+            prev_data = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
                  
         decs = [[]*self.num_channels]
         tmp = []
@@ -873,13 +879,13 @@ class XRNNModel(nn.Module):
             tmp.append(self.drop(self.emb_encoders[c](inputs[c][:,0])))
         emb_t = torch.cat(tmp, dim=1)
         for t in range(inputs[0].size(1)):
-            new_h_t = self.get_new_h_t(prevs, conditions, batch_size, t, args)
+            new_h_t = self.get_new_h_t(prev_data, conditions, batch_size, t, args)
             if self.rnn_type == 'LSTM': 
                 hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
             else:
                 hidden = self.rnn(emb_t.squeeze(1), new_h_t)
             out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
-            prevs.append(out_t)
+            prev_data.append(out_t)
             out_t = self.drop(out_t)
             tmp = []
             for c in range(self.num_channels):
@@ -897,14 +903,14 @@ class XRNNModel(nn.Module):
         return decs, hidden
 
 
-    def forward(self, data, hidden, args, prevs=None):
+    def forward(self, data, hidden, args, prev_data=None):
         ''' input should be a list with aligned inputs for each channel '''
         ''' conditions should be a list with indices of the prev hidden states '''
         ''' for conditioning. -1 means no condition '''
         ''' returns a list of outputs for each channel '''
         # print self.default_h
         if args.ss:
-            return self.forward_ss(data, hidden, args, prevs)
+            return self.forward_ss(data, hidden, args, prev_data)
         else:
             # list of (bsz,seqlen)
             inputs = data["data"]
@@ -916,17 +922,17 @@ class XRNNModel(nn.Module):
             for c in range(self.num_channels):
                 embs.append(self.drop(self.emb_encoders[c](inputs[c])))
             rnn_input = torch.cat(embs, dim=2)
-            if prevs is None:
+            if prev_data is None:
                 # Train mode
-                prevs = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
+                prev_data = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                new_h_t = self.get_new_h_t(prevs, conditions, batch_size, t, args)
+                new_h_t = self.get_new_h_t(prev_data, conditions, batch_size, t, args)
                 if self.rnn_type == 'LSTM': 
                     hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
                 else:
                     hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                prevs.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
-                output += [prevs[-1]]
+                prev_data.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
+                output += [prev_data[-1]]
             output = torch.stack(output, 1)
             output = self.drop(output)
 
@@ -935,7 +941,7 @@ class XRNNModel(nn.Module):
                 decoded = self.emb_decoders[i](
                     output.view(output.size(0)*output.size(1), output.size(2)))
                 decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, prevs[-1]
+            return decs, prev_data[-1]
 
 # END XRNN
 

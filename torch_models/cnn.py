@@ -31,7 +31,9 @@ class CNN(nn.Module):
             x = Variable(torch.FloatTensor(x).unsqueeze(1), requires_grad=False)
         out = self.layer1(x)
         out = self.layer2(out)
-        out = out.view(out.size(0), -1)
+        print x
+        print out
+        out = out.view(out.size(0), -1) # arrange by bsz
         out = self.fc(out)
         return out
 
