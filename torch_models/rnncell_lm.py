@@ -135,11 +135,6 @@ class AttentionRNNModel(nn.Module):
             self.nhid+args.emsize*self.num_channels, self.nhid, nlayers) 
         self.fc1 = nn.Linear(self.nhid+args.emsize, self.nhid) 
         self.fc2 = nn.Linear(self.nhid, 1)
-        self.b1 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        self.b2 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        if args.cuda:
-            self.b1.cuda()
-            self.b2.cuda()
 
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
@@ -170,13 +165,16 @@ class AttentionRNNModel(nn.Module):
         # self-attention over previous segment encodings
         vs = []
         for i, prev_enc in enumerate(prevs):
-            x = torch.cat([prev_enc.squeeze(), h_backbone])
-            x = self.fc1(x) + self.b1
-            x = F.tanh(self.fc2(x) + self.b2)
+            x = torch.cat([prev_enc.squeeze(), h_backbone], dim=1)
+            x = self.fc1(x)
+            x = F.tanh(self.fc2(x))
             vs.append(x)
-        softmax = F.softmax(torch.cat(vs))
-        attn_prev_enc = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0)
-        new_input = torch.cat([h_backbone, attn_prev_enc]).unsqueeze(0)
+        softmax = F.softmax(torch.cat(vs, dim=1)) # bsz x t
+        bsz = softmax.size(0)
+        # This is not fast, but prevs is a list for generate purposes (for now) 
+        att_prev_enc = sum([torch.cat(
+            [softmax[b][t]*prevs[t][b] for b in range(bsz)]) for t in range(len(prevs))])
+        new_input = torch.cat([h_backbone, att_prev_enc.squeeze()], dim=1)
         return new_input
 
     # TODO implement this 
@@ -203,7 +201,7 @@ class AttentionRNNModel(nn.Module):
 
             if train_mode:
                 # Train mode. Need to save this as a list because of generate-mode.
-                prevs = [[] for b in range(bsz)]
+                prevs = []
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Note that t is input-indexed
                 if curr_t is not None: t = curr_t
@@ -211,18 +209,12 @@ class AttentionRNNModel(nn.Module):
                 # the backbone RNN in the first measure. TODO magic number
                 # Encoding is based on input indexing, not outputs.
                 rnn_input_to_concat = []
-                for b in range(bsz):
-                    emb_t_b = emb_t.squeeze(1)[b].unsqueeze(0)
-                    # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
-                    t_to_use = t if train_mode else 0
+                
+                # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
+                t_to_use = t if train_mode else 0
 
-                    prevs[b].append(emb_t_b)
-                    rnn_input_to_concat.append(
-                            self.get_self_attention_new_input(
-                                hidden['backbone'][b], prevs[b], args))
-                rnn_input_t = torch.cat(rnn_input_to_concat)
-
-                # Run the backbone RNN
+                prevs.append(emb_t)
+                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prevs, args)
                 hidden['backbone'] = self.rnn(rnn_input_t, hidden['backbone'])
                 output += [hidden['backbone']]
 
@@ -265,15 +257,6 @@ class MRNNModel(nn.Module):
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
         self.fc4 = nn.Linear(self.nhid/2, 1)
-        self.b1 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        self.b2 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        self.b3 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        self.b4 = nn.Parameter(torch.FloatTensor([0]).zero_())
-        if args.cuda:
-            self.b1.cuda()
-            self.b2.cuda()
-            self.b3.cuda()
-            self.b4.cuda()
 
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
@@ -329,8 +312,8 @@ class MRNNModel(nn.Module):
                 s = Variable(torch.FloatTensor([scores[i]]), requires_grad=False)
             # x = torch.cat([h_backbone, prev_enc.squeeze(), s])
             x = torch.cat([prev_enc.squeeze(), s])
-            x = self.fc1(x) + self.b1
-            x = F.tanh(self.fc2(x) + self.b2)
+            x = self.fc1(x) 
+            x = F.tanh(self.fc2(x))
             vs.append(x)
         softmax = F.softmax(torch.cat(vs))
         decoder_h0 = torch.sum(torch.cat([prevs[i]*softmax[i] for i in range(len(prevs))]), 0).unsqueeze(0)
