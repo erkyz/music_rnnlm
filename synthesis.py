@@ -135,7 +135,7 @@ for subdir_i, d in enumerate(['train', 'valid', 'test']):
     metas = {}
     for structure_list in structure_lists:
         for num_generated in range(num_per_structure_list[subdir_i]):
-            ts, _ = ts_counter.most_common(NUM_TS)[num_generated%NUM_TS]
+            ts, _ = ts_counter.most_common(NUM_TS)[num_generated % NUM_TS]
             sample = []
             # sample len(structure_list) sections for this time signature
             for idx in range(len(structure_list)):
