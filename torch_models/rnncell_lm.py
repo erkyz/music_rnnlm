@@ -84,7 +84,7 @@ class RNNCellModel(nn.Module):
 
         return decs, hidden
 
-    def forward(self, data, hidden, args):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         if args.ss:
             return self.forward_ss(data, hidden, args)
         else:

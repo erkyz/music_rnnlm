@@ -39,7 +39,7 @@ EMSIZE=200
 DROP=0.5
 NL=1
 
-EPOCHS=25
+EPOCHS=30
 #DATA="../music_data/CMaj_Nottingham/"
 #TMP_PREFIX="CMaj_Nottingham_correct"
 #SAVE='../tmp/mrnn_prefinal.pt'
@@ -51,7 +51,7 @@ METAF="meta.p"
 LR=0.002
 VOCAB_PATHS=\[\"$DATA\"\]
 
-python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$2 --temperature=0.5 --save=$SAVE --baseline --synth_data # --cnn_encoder --synth_data
+python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$2 --temperature=0.5 --save=$SAVE --baseline --synth_data # --cnn_encoder # --synth_data
 
 # OUTF="attn"
 # python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA_DIR --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$2 --temperature=0.5 --save=$SAVE --mode='generate' --condition_piece="../music_data/CMaj_Nottingham/train/jigs_simple_chords_47.mid" --checkpoint=$SAVE --outf=$OUTF
