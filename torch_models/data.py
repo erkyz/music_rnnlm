@@ -3,7 +3,6 @@ import os, random
 import torch
 import util
 import pickle
-import similarity
 
 class Corpus(object):
     def __init__(self):

@@ -8,6 +8,9 @@ class Event(object):
     def __eq__(self, other):
         return self.original == other.original and self.i == other.i
 
+    def __hash__(self):
+        return self.i
+
     @staticmethod
     def not_found(): 
         raise Exception("event not found in vocab")

@@ -17,6 +17,8 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
     hidden = model.init_hidden(bsz)
     if args.arch == 'prnn':
         prev_data = [hidden["parallel"]]
+    elif args.arch == 'attn':
+        prev_data = []
     elif args.arch == 'mrnn':
         prev_data = {'score_softmax': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
     elif args.arch == 'ernn':

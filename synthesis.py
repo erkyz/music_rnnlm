@@ -11,7 +11,8 @@ import itertools
 import pickle
 import random
 
-import util
+sys.path.insert(0, 'torch_models')
+import util, similarity
 
 # USE PYTHON3 FOR THIS BECAUSE MUSIC21 FOR PYTHON 2 IS OUTDATED.
 if sys.version_info[0] != 3:
@@ -127,17 +128,14 @@ else:
 
 # get most frequent time signature
 print(ts_counter)
-ts, _ = ts_counter.most_common(1)[0]
+
+NUM_TS = 50
 
 for subdir_i, d in enumerate(['train', 'valid', 'test']):
     metas = {}
     for structure_list in structure_lists:
         for num_generated in range(num_per_structure_list[subdir_i]):
-            '''
-            # pick one of the time signatures
-            i = random.randrange(sum(ts_counter.values()))
-            ts = next(itertools.islice(ts_counter.elements(), i, None))
-            '''
+            ts, _ = ts_counter.most_common(NUM_TS)[num_generated%NUM_TS]
             sample = []
             # sample len(structure_list) sections for this time signature
             for idx in range(len(structure_list)):
@@ -148,7 +146,7 @@ for subdir_i, d in enumerate(['train', 'valid', 'test']):
 
             info_dict = {
                     'sample': sample,
-                    'ts': time_signature,
+                    'ts': ts,
                     }
 
             score = music21.stream.Stream()
@@ -202,16 +200,14 @@ for subdir_i, d in enumerate(['train', 'valid', 'test']):
 
             indices_of_sections = [[j for j in range(len(structure_list)) if structure_list[j] == i] for i in range(num_sections)]
             repeating_sections = [x for x in indices_of_sections if len(x) > 1]
-            
-            avg_ed = 5
-
-            # Create a len(structure_lis)^2 SSM (1 or 0)
-            segment_sdm = [[0 if structure_list[j] == structure_list[i] else avg_ed for j in range(len(structure_list))] for i in range(len(structure_list))]
+           
+            segments = list(zip(sample_starting_idxs, sample_ending_idxs))
+            segment_sdm = similarity.get_measure_sdm(origs, segments)
 
             # Note that segments doesn't include START or END.
             metas[fileNameWithStructure] = {
                     'origs': origs,
-                    'segments': list(zip(sample_starting_idxs, sample_ending_idxs)),
+                    'segments': segments,
                     'ssm': ssm, 
                     'segment_sdm': segment_sdm, 
                     'repeating_sections': repeating_sections,
@@ -220,5 +216,7 @@ for subdir_i, d in enumerate(['train', 'valid', 'test']):
 
     with open(out_dir + '/' + d + '/meta.p', 'wb') as f:
         pickle.dump(metas, f, protocol=2)
+
+print ("Done!")
 
 
