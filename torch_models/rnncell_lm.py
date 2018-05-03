@@ -84,7 +84,7 @@ class RNNCellModel(nn.Module):
 
         return decs, hidden
 
-    def forward(self, data, hidden, args):
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
         if args.ss:
             return self.forward_ss(data, hidden, args)
         else:
@@ -165,7 +165,7 @@ class AttentionRNNModel(nn.Module):
         # self-attention over previous segment encodings
         vs = []
         for i, prev_enc in enumerate(prev_data):
-            x = torch.cat([prev_enc.squeeze(), h_backbone], dim=1)
+            x = torch.cat([prev_enc.squeeze(1), h_backbone], dim=1)
             x = self.fc1(x)
             x = F.tanh(self.fc2(x))
             vs.append(x)
@@ -174,7 +174,7 @@ class AttentionRNNModel(nn.Module):
         # This is not fast, but prev_data is a list for generate purposes (for now) 
         att_prev_enc = sum([torch.cat(
             [softmax[b][t]*prev_data[t][b] for b in range(bsz)]) for t in range(len(prev_data))])
-        new_input = torch.cat([h_backbone, att_prev_enc.squeeze()], dim=1)
+        new_input = torch.cat([h_backbone, att_prev_enc.squeeze(1)], dim=1)
         return new_input
 
     # TODO implement this 

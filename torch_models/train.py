@@ -259,6 +259,8 @@ def batchify(source, bsz, sv, vanilla_model):
         batch_data["metadata"].append(channel_metadata)
         if args.conditional_model:
             batch_data["conditions"].append(channel_conditions)
+    if args.conditional_model:
+        batch_data["conditions"] = np.asarray(batch_data["conditions"])
     return batch_data
 
 def get_batch_variables(batches, batch, evaluation=False):
@@ -402,32 +404,26 @@ def evaluate_ssm():
         if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
-<<<<<<< HEAD
-        print [e.i for e in generated]
-        print conditions
-        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
+        generated = old_generate.generate(
+                model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
-=======
-        print conditions
-        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab,
-                vanilla_model)
-        print [e.i for e in generated]
->>>>>>> a8fdf8702826c7be1f98aa0ff69882f6dcbc747e
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'])
-        repeating_sections = meta_dict['repeating_sections']
+        if args.synth_data:
+            repeating_sections = meta_dict['repeating_sections']
+        else:
+            # Get repeating sections (those with ED=0 in gold segment sdm)
+            zero_idxs = np.where(meta_dict['segment_sdm'] == 0)
+            repeating_sections = []
+            for i in range(zero_idxs[0].shape[0]):
+                if zero_idxs[0][i] <= zero_idxs[1][i]:
+                    repeating_sections.append((zero_idxs[0][i], zero_idxs[1][i]))
         for repeats in repeating_sections:
             repeat_tups = list(combinations(repeats, 2))
             for i,j in repeat_tups:
                 total_repeat_ed += gen_measure_sdm[i,j]
             num_total_repeats += len(repeat_tups)
-
-        '''
-        gold_measure_ssm = similarity.get_measure_ssm(
-                [e.original for e in [sv.i2e[0][i] for i in events[0]][1:][:-1]], 
-                meta_dict['segments'], args)
-        '''
     return total_repeat_ed / num_total_repeats
 
 
@@ -462,10 +458,10 @@ def train():
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         # hidden = repackage_hidden(hidden)
+        hidden = model.init_hidden(args.batch_size)
         if args.cnn_encoder:
-            hidden = cnn(data["conditions"][0], args)
-        else:
-            hidden = model.init_hidden(args.batch_size)
+            if args.arch in {'mrnn', 'attn'}:
+                hidden['backbone'] = cnn(data["conditions"][0], args)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden, args)
@@ -517,9 +513,8 @@ if args.mode == 'train':
         for epoch in range(1, args.epochs+1):
             args.epoch = epoch-1
             epoch_start_time = time.time()
-            if args.synth_data:
-                gen_ED = evaluate_ssm()
-                print gen_ED
+            gen_ED = evaluate_ssm()
+            print gen_ED
             train_loss = train()
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
@@ -530,10 +525,7 @@ if args.mode == 'train':
             print('-' * 89)
             losses["train"].append(train_loss)
             losses["valid"].append(val_loss)
-            if args.use_metaf and args.synth_data:
-                writer.writerow([train_loss,val_loss,gen_ED])
-            else:
-                writer.writerow([train_loss,val_loss])
+            writer.writerow([train_loss,val_loss,gen_ED])
             # Write to file without closing
             train_outf.flush()
             os.fsync(train_outf.fileno())
