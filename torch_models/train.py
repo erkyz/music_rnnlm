@@ -158,7 +158,6 @@ def get_batch_metadata(source, batch, bsz):
     source_slice = source[start_idx:start_idx+this_bsz]
     metadata = []
     for b in range(this_bsz):
-        print source_slice[b][1]['segments']
         metadata.append(source_slice[b][1]['segments'])
     return metadata
 
@@ -513,11 +512,11 @@ if args.mode == 'train':
         for epoch in range(1, args.epochs+1):
             args.epoch = epoch-1
             epoch_start_time = time.time()
-            gen_ED = evaluate_ssm()
-            print gen_ED
             train_loss = train()
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
+            gen_ED = evaluate_ssm()
+            print "Gen ED", gen_ED
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
                     'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time), train_loss,
