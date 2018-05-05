@@ -233,9 +233,9 @@ class AttentionRNNModel(nn.Module):
                 t_to_use = t if train_mode else 0
 
                 prev_data.append(hidden['backbone'])
-                new_h_t = self.get_self_attention_new_h(hidden['backbone'], prev_data, args)
-                hidden['backbone'] = self.rnn(emb_t.squeeze(1), new_h_t)
-                output += [hidden['backbone']]
+                hidden['backbone'] = self.rnn(emb_t.squeeze(1), hidden['backbone'])
+                new_output = self.get_self_attention_new_h(hidden['backbone'], prev_data, args)
+                output += [new_output]
 
             output = torch.stack(output, 1)
             output = self.drop(output)
