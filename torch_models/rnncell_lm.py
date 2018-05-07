@@ -380,6 +380,7 @@ class MRNNModel(nn.Module):
             segs = data["metadata"][0]
             # NOTE segs is indexed ignoring the START token, so it's aligned with OUTPUTS!
             beg_idxs = [[s[0] for s in segs[b]] for b in range(bsz)]
+            next_begins = [beg_idxs[1] for b in range(bsz)]
            
             # print inputs[0][0], conditions[0]
             # print "-"*88
