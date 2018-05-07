@@ -249,7 +249,7 @@ class AttentionRNNModel(nn.Module):
 
 
 TMP=10
-THREE=3
+TWO=2
 
 class MRNNModel(nn.Module):
     def __init__(self, args):
@@ -266,8 +266,9 @@ class MRNNModel(nn.Module):
             self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i]+TMP, args.emsize)) 
             self.add_module('prev_emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
             self.add_module('prev_emb_encoder_2_' + str(i), nn.Embedding(ntokens[i], args.emsize))
+        insize = args.emsize+TMP if args.input_feed else args.emsize
         self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            (args.emsize+TMP)*self.num_channels, self.nhid, nlayers)
+            insize*self.num_channels, self.nhid, nlayers)
         self.prev_enc_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
@@ -277,7 +278,7 @@ class MRNNModel(nn.Module):
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
         self.fc4 = nn.Linear(self.nhid/2, 1)
-        self.fc5 = nn.Linear(THREE, self.nhid/2) # TODO
+        self.fc5 = nn.Linear(TWO, self.nhid/2) # TODO
         self.fc6 = nn.Linear(self.nhid/2, TMP) 
 
         for i in range(len(ntokens)):
@@ -327,10 +328,11 @@ class MRNNModel(nn.Module):
         return alpha*h_dec + (1-alpha)*h_backbone
 
     def get_future_encoding(self, next_scores, args):
-        x = Variable(torch.FloatTensor(next_scores))
         if args.cuda:
-            x.cuda()
-        x = self.fc5(x)
+            s = Variable(torch.cuda.FloatTensor(next_scores), requires_grad=False)
+        else:
+            s = Variable(torch.FloatTensor(next_scores), requires_grad=False)
+        x = self.fc5(s)
         x = F.tanh(self.fc6(x))
         return x
 
@@ -446,11 +448,11 @@ class MRNNModel(nn.Module):
                     f = []
                     for b in range(bsz):
                         curr_measure = len(prev_data['encs'][b])
-                        if curr_measure >= len(conditions[b][curr_measure]) - THREE:
+                        if curr_measure >= len(conditions[b][curr_measure]) - TWO:
                             f.append(self.default_future.unsqueeze(0))
                         else:
                             f.append(self.get_future_encoding(
-                                conditions[b][curr_measure][curr_measure+1:curr_measure+THREE+1],
+                                conditions[b][curr_measure][curr_measure+1:curr_measure+TWO+1],
                                 args).unsqueeze(0))
                     inp_t = torch.cat([emb_t.squeeze(1), torch.cat(f, dim=0)], dim=1)
                     hidden['backbone'] = self.rnn(inp_t, hidden['backbone'])

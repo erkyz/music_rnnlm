@@ -74,6 +74,9 @@ parser.add_argument('--ss', action='store_true',
                     help='scheduled sampling')
 parser.add_argument('--baseline', action='store_true',
                     help='use baseline version of model')
+parser.add_argument('--input_feed', action='store_true',
+                    help='use input feeding')
+
 
 
 # Stuff for measure splitting
@@ -406,6 +409,7 @@ def evaluate_ssm():
         generated = old_generate.generate(
                 model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
+        print [e.i for e in generated[1:][:-1]]
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
                 meta_dict['segments'])
