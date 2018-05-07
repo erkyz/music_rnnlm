@@ -20,10 +20,10 @@ FILE_NAME="../tmp/"$ARCH"_"$C"_"$DISTANCE_THRESHOLD"_"$RNN_TYPE"_drop"$DROP"_nh"
 
 #DATA_DIR="../music_data/010_011_large/" 
 #TMP_PREFIX="010_011_large"
-DATA_DIR="../music_data/[[0,1,0],[0,1,1]]/" 
-TMP_PREFIX="010_011"
-#DATA_DIR="../music_data/CMaj_Nottingham/" 
-#TMP_PREFIX="CMaj_Nottingham"
+#DATA_DIR="../music_data/[[0,1,0],[0,1,1]]/" 
+#TMP_PREFIX="010_011"
+DATA_DIR="../music_data/CMaj_Nottingham/" 
+TMP_PREFIX="CMaj_Nottingham"
 VOCAB_PATHS=\[\"$DATA_DIR\"\]
 
 LR=0.001
