@@ -247,120 +247,9 @@ class AttentionRNNModel(nn.Module):
                 decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
             return decs, hidden
 
-'''
-class AttentionRNNModel(nn.Module):
-    def __init__(self, args):
-        super(AttentionRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-         
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            self.nhid+args.emsize*self.num_channels, self.nhid, nlayers) 
-        self.fc1 = nn.Linear(self.nhid+args.emsize, self.nhid) 
-        self.fc2 = nn.Linear(self.nhid, 1)
 
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        # For backbone RNN
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-
-    def init_weights(self):
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        backbone = Variable(weight.new(bsz, self.nhid).zero_())
-        return {'backbone': backbone}
-   
-    def get_self_attention_new_input(self, h_backbone, prev_data, args):
-        # self-attention over previous segment encodings
-        vs = []
-        for i, prev_enc in enumerate(prev_data):
-            x = torch.cat([prev_enc.squeeze(1), h_backbone], dim=1)
-            x = self.fc1(x)
-            x = F.tanh(self.fc2(x))
-            vs.append(x)
-        softmax = F.softmax(torch.cat(vs, dim=1)) # bsz x t
-        bsz = softmax.size(0)
-        # This is not fast, but prev_data is a list for generate purposes (for now) 
-        att_prev_enc = sum([torch.cat(
-            [softmax[b][t]*prev_data[t][b] for b in range(bsz)]) for t in range(len(prev_data))])
-        new_input = torch.cat([h_backbone, att_prev_enc.squeeze(1)], dim=1)
-        return new_input
-
-    # TODO implement this 
-    def forward_ss(self, data, hidden, args, prev_data=None):
-         return 
-
-    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
-        # hidden is a dict
-        # what we call "prev_data" is not actually previous hidden states.
-        train_mode = curr_t is None
-        if args.ss:
-            return self.forward_ss(data, hidden, args, prev_data)
-        else:
-            # list of (bsz,seqlen)
-            inputs = data["data"]
-            bsz = inputs[0].size(0)
-           
-            output = []
-            embs = []
-            for c in range(self.num_channels):
-                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-            emb_start = self.emb_encoders[0](inputs[0][0][0])
-            rnn_input = torch.cat(embs, dim=2)
-
-            if train_mode:
-                # Train mode. Need to save this as a list because of generate-mode.
-                prev_data = []
-            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                # Note that t is input-indexed
-                if curr_t is not None: t = curr_t
-                # We initialize the score_softmax to be such that the model prefers 
-                # the backbone RNN in the first measure. TODO magic number
-                # Encoding is based on input indexing, not outputs.
-                rnn_input_to_concat = []
-                
-                # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
-                t_to_use = t if train_mode else 0
-
-                prev_data.append(emb_t)
-                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prev_data, args)
-                hidden['backbone'] = self.rnn(rnn_input_t, hidden['backbone'])
-                output += [hidden['backbone']]
-
-            output = torch.stack(output, 1)
-            output = self.drop(output)
-
-            decs = []
-            for i in range(self.num_channels):
-                decoded = self.emb_decoders[i](
-                    output.view(output.size(0)*output.size(1), output.size(2)))
-                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, hidden
-'''
-
-# end AttentionRNNModel 
-
+TMP=10
+THREE=3
 
 class MRNNModel(nn.Module):
     def __init__(self, args):
@@ -374,20 +263,22 @@ class MRNNModel(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.nhid = nhid # output dimension
         for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i]+TMP, args.emsize)) 
             self.add_module('prev_emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
             self.add_module('prev_emb_encoder_2_' + str(i), nn.Embedding(ntokens[i], args.emsize))
         self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
+            (args.emsize+TMP)*self.num_channels, self.nhid, nlayers)
         self.prev_enc_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        self.fc1 = nn.Linear(self.nhid+1, self.nhid) # +1 for the simscore
-        self.fc2 = nn.Linear(self.nhid, 1)
+        self.fc1 = nn.Linear(self.nhid+1, self.nhid/2) # +1 for the simscore
+        self.fc2 = nn.Linear(self.nhid/2, 1)
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
         self.fc4 = nn.Linear(self.nhid/2, 1)
+        self.fc5 = nn.Linear(THREE, self.nhid/2) # TODO
+        self.fc6 = nn.Linear(self.nhid/2, TMP) 
 
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
@@ -399,12 +290,15 @@ class MRNNModel(nn.Module):
         # For prev_dec RNN
         self.prev_emb_encoders_2 = AttrProxy(self, 'prev_emb_encoder_2_') 
 
-        self.init_weights()
+        self.init_weights(args)
 
         self.rnn_type = args.rnn_type
         self.nlayers = nlayers
 
-    def init_weights(self):
+    def init_weights(self, args):
+        self.default_future = nn.Parameter(torch.FloatTensor(TMP).zero_())
+        if args.cuda:
+            self.default_future.cuda()
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.emb_encoders[i].weight.data)
             nn.init.xavier_normal(self.prev_emb_encoders[i].weight.data)
@@ -431,6 +325,14 @@ class MRNNModel(nn.Module):
         if random.random() < 0.01:
             print score_softmax.data[0], alpha.data[0]
         return alpha*h_dec + (1-alpha)*h_backbone
+
+    def get_future_encoding(self, next_scores, args):
+        x = Variable(torch.FloatTensor(next_scores))
+        if args.cuda:
+            x.cuda()
+        x = self.fc5(x)
+        x = F.tanh(self.fc6(x))
+        return x
 
     def self_attention(self, h_backbone, prev_encs, prev_weighted_score, args):
         # self-attention over previous segment encodings
@@ -538,7 +440,21 @@ class MRNNModel(nn.Module):
                             self.prev_dec_rnn(emb_t_b_dec, hidden['prev_dec'][b])
 
                 # Run the backbone RNN
-                hidden['backbone'] = self.rnn(emb_t.squeeze(1), hidden['backbone'])
+                # Get the SSM values of the next X measures.
+                if args.input_feed:
+                    f = []
+                    for b in range(bsz):
+                        curr_measure = len(prev_data['encs'][b])
+                        if curr_measure >= len(conditions[b][curr_measure]) - THREE:
+                            f.append(self.default_future.unsqueeze(0))
+                        else:
+                            f.append(self.get_future_encoding(
+                                conditions[b][curr_measure][curr_measure+1:curr_measure+THREE+1],
+                                args).unsqueeze(0))
+                    inp_t = torch.cat([emb_t.squeeze(1), torch.cat(f, dim=0)], dim=1)
+                    hidden['backbone'] = self.rnn(inp_t, hidden['backbone'])
+                else:
+                    hidden['backbone'] = self.rnn(emb_t.squeeze(1), hidden['backbone'])
 
                 # Replace output with decoder output if we're decoding a measure 
                 to_concat = []
@@ -1075,4 +991,118 @@ class XRNNModel(nn.Module):
             return decs, prev_data[-1]
 
 # END XRNN
+
+'''
+class AttentionRNNModel(nn.Module):
+    def __init__(self, args):
+        super(AttentionRNNModel, self).__init__()
+        nhid = args.nhid
+        nlayers = args.nlayers
+        dropout = args.dropout
+        ntokens = args.ntokens
+         
+        self.num_channels = len(ntokens)
+        self.drop = nn.Dropout(dropout)
+        self.nhid = nhid # output dimension
+        for i in range(self.num_channels):
+            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
+            self.nhid+args.emsize*self.num_channels, self.nhid, nlayers) 
+        self.fc1 = nn.Linear(self.nhid+args.emsize, self.nhid) 
+        self.fc2 = nn.Linear(self.nhid, 1)
+
+        for i in range(len(ntokens)):
+            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
+        # For backbone RNN
+        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
+        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
+
+        self.init_weights()
+
+        self.rnn_type = args.rnn_type
+        self.nlayers = nlayers
+
+    def init_weights(self):
+        for i in range(self.num_channels):
+            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
+            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
+            self.emb_decoders[i].bias.data.fill_(0)
+
+    def is_lstm(self):
+        return self.rnn_type == 'LSTM'
+
+    def init_hidden(self, bsz):
+        weight = next(self.parameters()).data
+        backbone = Variable(weight.new(bsz, self.nhid).zero_())
+        return {'backbone': backbone}
+   
+    def get_self_attention_new_input(self, h_backbone, prev_data, args):
+        # self-attention over previous segment encodings
+        vs = []
+        for i, prev_enc in enumerate(prev_data):
+            x = torch.cat([prev_enc.squeeze(1), h_backbone], dim=1)
+            x = self.fc1(x)
+            x = F.tanh(self.fc2(x))
+            vs.append(x)
+        softmax = F.softmax(torch.cat(vs, dim=1)) # bsz x t
+        bsz = softmax.size(0)
+        # This is not fast, but prev_data is a list for generate purposes (for now) 
+        att_prev_enc = sum([torch.cat(
+            [softmax[b][t]*prev_data[t][b] for b in range(bsz)]) for t in range(len(prev_data))])
+        new_input = torch.cat([h_backbone, att_prev_enc.squeeze(1)], dim=1)
+        return new_input
+
+    # TODO implement this 
+    def forward_ss(self, data, hidden, args, prev_data=None):
+         return 
+
+    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
+        # hidden is a dict
+        # what we call "prev_data" is not actually previous hidden states.
+        train_mode = curr_t is None
+        if args.ss:
+            return self.forward_ss(data, hidden, args, prev_data)
+        else:
+            # list of (bsz,seqlen)
+            inputs = data["data"]
+            bsz = inputs[0].size(0)
+           
+            output = []
+            embs = []
+            for c in range(self.num_channels):
+                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
+            emb_start = self.emb_encoders[0](inputs[0][0][0])
+            rnn_input = torch.cat(embs, dim=2)
+
+            if train_mode:
+                # Train mode. Need to save this as a list because of generate-mode.
+                prev_data = []
+            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
+                # Note that t is input-indexed
+                if curr_t is not None: t = curr_t
+                # We initialize the score_softmax to be such that the model prefers 
+                # the backbone RNN in the first measure. TODO magic number
+                # Encoding is based on input indexing, not outputs.
+                rnn_input_to_concat = []
+                
+                # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
+                t_to_use = t if train_mode else 0
+
+                prev_data.append(emb_t)
+                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prev_data, args)
+                hidden['backbone'] = self.rnn(rnn_input_t, hidden['backbone'])
+                output += [hidden['backbone']]
+
+            output = torch.stack(output, 1)
+            output = self.drop(output)
+
+            decs = []
+            for i in range(self.num_channels):
+                decoded = self.emb_decoders[i](
+                    output.view(output.size(0)*output.size(1), output.size(2)))
+                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
+            return decs, hidden
+'''
+
+# end AttentionRNNModel 
 
