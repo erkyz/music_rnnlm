@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
@@ -278,7 +279,7 @@ class MRNNModel(nn.Module):
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/2)
         self.fc4 = nn.Linear(self.nhid/2, 1)
-        self.fc5 = nn.Linear(TWO, self.nhid/2) # TODO
+        self.fc5 = nn.Linear(TWO+1, self.nhid/2) # +1 for num_left
         self.fc6 = nn.Linear(self.nhid/2, TMP) 
 
         for i in range(len(ntokens)):
@@ -297,7 +298,7 @@ class MRNNModel(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self, args):
-        self.default_future = nn.Parameter(torch.FloatTensor(TMP).zero_())
+        self.default_future = nn.Parameter(torch.FloatTensor(TWO).zero_())
         if args.cuda:
             self.default_future.cuda()
         for i in range(self.num_channels):
@@ -327,14 +328,28 @@ class MRNNModel(nn.Module):
             print score_softmax.data[0], alpha.data[0]
         return alpha*h_dec + (1-alpha)*h_backbone
 
-    def get_future_encoding(self, next_scores, args):
-        if args.cuda:
-            s = Variable(torch.cuda.FloatTensor(next_scores), requires_grad=False)
+    def get_future_encoding(self, ssm, curr_measure, num_left, args):
+        if curr_measure >= len(ssm[curr_measure]) - TWO:
+            next_scores = self.default_future
+            if args.cuda:
+                num_left_tensor = Variable(
+                        torch.cuda.FloatTensor([num_left]), requires_grad=False)
+            else:
+                num_left_tensor = Variable(
+                        torch.FloatTensor([num_left]), requires_grad=False)
+            s = torch.cat([next_scores, num_left_tensor])
         else:
-            s = Variable(torch.FloatTensor(next_scores), requires_grad=False)
+            next_scores = ssm[curr_measure][curr_measure+1:curr_measure+TWO+1]
+            if args.cuda:
+                s = Variable(torch.cuda.FloatTensor(np.append(next_scores,num_left)), requires_grad=False)
+            else:
+                s = Variable(torch.FloatTensor(np.append(next_scores,num_left)), requires_grad=False)
+
+        # Run fully-connected layer
         x = self.fc5(s)
         x = F.tanh(self.fc6(x))
         return x
+
 
     def self_attention(self, h_backbone, prev_encs, prev_weighted_score, args):
         # self-attention over previous segment encodings
@@ -382,7 +397,7 @@ class MRNNModel(nn.Module):
             segs = data["metadata"][0]
             # NOTE segs is indexed ignoring the START token, so it's aligned with OUTPUTS!
             beg_idxs = [[s[0] for s in segs[b]] for b in range(bsz)]
-            next_begins = [beg_idxs[1] for b in range(bsz)]
+            next_beg_idxs = [[s[1] for s in segs[b]] for b in range(bsz)]
            
             # print inputs[0][0], conditions[0]
             # print "-"*88
@@ -418,6 +433,9 @@ class MRNNModel(nn.Module):
                                     emb_t_b_enc, hidden['prev_enc'][b])
 
                     if t in beg_idxs[b] and t != 0:
+                        # Slice off beginning of next_beg_idxs
+                        next_beg_idxs[b] = next_beg_idxs[b][1:]
+
                         # Add the prev measure encoding to prev_data
                         prev_data['encs'][b].append(hidden['prev_enc'][b])
 
@@ -448,12 +466,10 @@ class MRNNModel(nn.Module):
                     f = []
                     for b in range(bsz):
                         curr_measure = len(prev_data['encs'][b])
-                        if curr_measure >= len(conditions[b][curr_measure]) - TWO:
-                            f.append(self.default_future.unsqueeze(0))
-                        else:
-                            f.append(self.get_future_encoding(
-                                conditions[b][curr_measure][curr_measure+1:curr_measure+TWO+1],
-                                args).unsqueeze(0))
+                        num_left = next_beg_idxs[b][0] - t
+                        f.append(self.get_future_encoding(
+                            conditions[b], curr_measure, num_left, args
+                            ).unsqueeze(0))
                     inp_t = torch.cat([emb_t.squeeze(1), torch.cat(f, dim=0)], dim=1)
                     hidden['backbone'] = self.rnn(inp_t, hidden['backbone'])
                 else:
