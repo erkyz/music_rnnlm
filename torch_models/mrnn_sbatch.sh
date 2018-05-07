@@ -42,15 +42,15 @@ NL=$6
 EPOCHS=30
 DATA="../music_data/CMaj_Nottingham/"
 TMP_PREFIX="CMaj_Nottingham_correct"
-SAVE='../tmp/nott_prefinal.pt'
 
 #DATA="../music_data/010_011_large/" 
 #TMP_PREFIX="010_011_large"
+INFO_OUT=$2
 SAVE=$3
 METAF="meta.p"
 LR=0.002
 VOCAB_PATHS=\[\"$DATA\"\]
 
-python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$2 --temperature=0.5 --save=$SAVE --baseline  # --cnn_encoder  # --synth_data
+python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$INFO_OUT --temperature=0.5 --save=$SAVE --baseline # --input_feed # --cnn_encoder  # --synth_data
 
 
