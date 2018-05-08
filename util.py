@@ -231,14 +231,8 @@ class PitchDurationVocab(SimpleVocab):
         score = music21.converter.parse(midf)
         out = [(START_OF_TRACK_NAME, START_OF_TRACK_NAME)]
         time_signature = get_ts(score)
-        measure_progress = 0
-        measure_limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         for part in score:
             for e in part:
-                if measure_progress >= measure_limit:
-                    if include_measure_boundaries:
-                        out.append((MEASURE_NAME, MEASURE_NAME))
-                    measure_progress -= measure_limit
                 if type(e) is music21.note.Note:
                     out.append((e.nameWithOctave, e.duration.quarterLength))
                     measure_progress += e.duration.quarterLength

@@ -1,4 +1,4 @@
-import os
+import os, sys
 import glob
 import music21
 import argparse
@@ -34,6 +34,7 @@ if not os.path.exists(this_dir):
     os.mkdir(this_dir)
 i = 0
 for file in glob.glob("*.mid"):
+    print (file)
     score = music21.converter.parse(file)
 
     # Only analyze if the key isn't explicitly labeled.
@@ -50,6 +51,12 @@ for file in glob.glob("*.mid"):
     if key is None:
         key = score.analyze('key')
     print ("original", key.tonic.name, key.mode)
+    if key.tonic.name + key.mode in {'Cminor', 'Aminor'}:
+        print 'Already in C_M/A_m'
+        newFileName = "../../" + "CMaj_" + args.corpus + "/" + args.dir + "/" + file
+        score.write('midi', newFileName)
+        continue
+        
     if key.mode == "major":
         halfSteps = majors[key.tonic.name]
         

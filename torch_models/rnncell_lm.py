@@ -329,6 +329,7 @@ class MRNNModel(nn.Module):
         return alpha*h_dec + (1-alpha)*h_backbone
 
     def get_future_encoding(self, ssm, curr_measure, num_left, args):
+        # Get a mapping of the next 2 segment edit distances PLUS num notes to end of measure
         if curr_measure >= len(ssm[curr_measure]) - TWO:
             next_scores = self.default_future
             if args.cuda:
