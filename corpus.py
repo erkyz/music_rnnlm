@@ -1,8 +1,8 @@
-
 import os, random
 import torch
-import util
 import pickle
+
+import util, vocab
 
 class Corpus(object):
     def __init__(self):
@@ -70,7 +70,7 @@ class Corpus(object):
         corpus.valids = info_dict["valids"]
         corpus.tests = info_dict["tests"]
         corpus.vocab_fname = info_dict["vocab_fname"]
-        corpus.vocab = util.PitchDurationVocab.load(corpus.vocab_fname)
+        corpus.vocab = vocab.PitchDurationVocab.load(corpus.vocab_fname)
         return corpus
 
     @classmethod

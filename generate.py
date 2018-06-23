@@ -2,11 +2,10 @@ import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
-
 import sys, os
 import argparse
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import data, util, similarity, beam_search, gen_util
+
+import corpus, similarity, gen_util
 
 
 NO_INFO_EVENT_IDX = 3
@@ -52,13 +51,8 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
         else:
             outputs_t, hidden = model(gen_data, hidden, args)
         
-
-        # print outputs_t
         word_weights = [F.softmax(outputs_t[c].squeeze().data.div(args.temperature)).cpu() for c in range(sv.num_channels)]
-        # print word_weights
         word_idxs = [torch.multinomial(word_weights[c], 1)[0].data[0] for c in range(sv.num_channels)] 
-        # print word_idxs
-        # print ""
         for c in range(sv.num_channels):
             if t < args.condition_notes:
                 # Always include START as the first generated token
@@ -69,7 +63,5 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
         if word_idxs[0] == sv.special_events["end"].i and end:
             break
 
-
     return generated_events[0]
-
 

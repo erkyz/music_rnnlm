@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import util
-import gen_util
+import gen_util, vocab
 
 # min window if we use "c"
 MIN_WINDOW = 4
 
-pdv = util.PitchDurationVocab()
+pdv = vocab.PitchDurationVocab()
 
 
 ######################################################################

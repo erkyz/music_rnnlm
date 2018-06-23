@@ -14,9 +14,9 @@ sys.path.insert(0, 'torch_models')
 import util, similarity
 
 parser = argparse.ArgumentParser(description='Measure parsing')
-parser.add_argument('--data', type=str, default='music_data/CMaj_Nottingham/',
+parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus to sample from')
-parser.add_argument('--out', type=str, default='music_data/guitar_melodies/',
+parser.add_argument('--out', type=str, default='../music_data/guitar_melodies/',
                     help='where to put melodies')
 args = parser.parse_args()
 

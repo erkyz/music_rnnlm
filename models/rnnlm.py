@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import time, util
+import time
 
 class AttrProxy(object):
     """Translates index lookups into attribute lookups."""
@@ -65,6 +65,7 @@ class RNNModel(nn.Module):
         for i in range(self.num_channels):
             embs.append(self.drop(self.encoders[i](torch.t(inputs[i])))) 
         rnn_input = torch.cat(embs, dim=2) 
+        # TODO
         # packed_input = torch.nn.utils.rnn.pack_padded_sequence(emb, seq_lens, batch_first=True)
         output, hidden = self.rnn(rnn_input, hidden)
         # output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)

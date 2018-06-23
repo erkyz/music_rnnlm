@@ -11,18 +11,18 @@ import itertools
 import pickle
 import random
 
-sys.path.insert(0, 'torch_models')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import util, similarity
 
-# USE PYTHON3 FOR THIS BECAUSE MUSIC21 FOR PYTHON 2 IS OUTDATED.
+# NOTE: MUST USE PYTHON3 WHEN RUNNING THIS SCRIPT BECAUSE MUSIC21 FOR PYTHON2 IS DEPRECATED.
+# Run "pip3 install music21"
 if sys.version_info[0] != 3:
     print("Use Python3!")
     exit()
 
 parser = argparse.ArgumentParser(description='Synthesize musical examples')
 
-# TODO
-parser.add_argument('--data', type=str, default='music_data/CMaj_Nottingham/',
+parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/',
                     help='location of the data corpus to sample from')
 parser.add_argument('--out_dir', type=str, default='music_data')
 parser.add_argument('--genre', type=str, default='ashover',

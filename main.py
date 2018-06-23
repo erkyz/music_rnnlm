@@ -15,12 +15,12 @@ import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from models import *
+from utils import *
 import util
-import data
-import rnnlm, rnncell_lm, hrnnlm
-import cnn
+import corpus
 import similarity
-import get_hiddens, old_generate, gen_util
+import generate, gen_util
 
 # event index for padding
 PADDING = 0
@@ -28,7 +28,7 @@ PADDING = 0
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
 # Data stuff
-parser.add_argument('--path', type=str, default='../music_data/CMaj_Nottingham/',
+parser.add_argument('--path', type=str, default='music_data/CMaj_Nottingham/',
                     help='location of the data corpus')
 parser.add_argument('--vocab_paths', type=str, default='',
                     help='location of the data corpus used for the vocabulary')
@@ -307,8 +307,6 @@ if args.mode == 'train':
         print "Loading model checkpoint"
         with open(args.checkpoint, 'rb') as f:
             model = torch.load(f)
-    elif args.arch == "hrnn":
-        model = hrnnlm.FactorHRNNModel(args)
     elif args.arch == "prnn":
         model = rnncell_lm.PRNNModel(args)
     elif args.arch == "xrnn":
@@ -406,7 +404,7 @@ def evaluate_ssm():
         if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
-        generated = old_generate.generate(
+        generated = generate.generate(
                 model, events, conditions, meta_dict, args, corpus.vocab,
                 vanilla_model)
         print [e.i for e in generated[1:][:-1]]
@@ -575,9 +573,9 @@ elif args.mode == 'generate':
         if args.conditional_model:
             conditions = gen_util.get_conditions(sv, args, vanilla_model, meta_dict)
 
-        generated = old_generate.generate(model, events, conditions, meta_dict, args, corpus.vocab, 
+        generated = generate.generate(model, events, conditions, meta_dict, args, corpus.vocab, 
                 vanilla_model, end=True)
-        outf = "../../generated/" + args.outf + '_' + str(i) + '.mid'
+        outf = "../generated/" + args.outf + '_' + str(i) + '.mid'
         sv.events2mid([generated], outf)
 
 elif args.mode == 'get_hiddens':
@@ -592,7 +590,5 @@ elif args.mode == 'get_rnn_ssms':
     get_and_save_rnn_ssms(corpus.trains, sv, vanilla_model, 'train')
     get_and_save_rnn_ssms(corpus.valids, sv, vanilla_model, 'valid')
     get_and_save_rnn_ssms(corpus.tests, sv, vanilla_model, 'test')
-
-
 
 

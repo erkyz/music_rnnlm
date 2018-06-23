@@ -4,7 +4,7 @@ import numpy as np
 from torch.autograd import Variable
 import torch.nn.functional as F
 import random
-import time, util
+import time
 
 class AttrProxy(object):
     """Translates index lookups into attribute lookups."""
