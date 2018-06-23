@@ -274,13 +274,14 @@ class MRNNModel(nn.Module):
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        self.fc1 = nn.Linear(self.nhid+1, self.nhid/2) # +1 for the simscore
-        self.fc2 = nn.Linear(self.nhid/2, 1)
+        four = 8
+        self.fc1 = nn.Linear(self.nhid+1, self.nhid/four) # +1 for the simscore
+        self.fc2 = nn.Linear(self.nhid/four, 1)
         # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
-        self.fc3 = nn.Linear(1, self.nhid/2)
-        self.fc4 = nn.Linear(self.nhid/2, 1)
-        self.fc5 = nn.Linear(TWO+1, self.nhid/2) # +1 for num_left
-        self.fc6 = nn.Linear(self.nhid/2, TMP) 
+        self.fc3 = nn.Linear(1, self.nhid/four)
+        self.fc4 = nn.Linear(self.nhid/four, 1)
+        self.fc5 = nn.Linear(TWO+1, self.nhid/four) # +1 for num_left
+        self.fc6 = nn.Linear(self.nhid/four, TMP) 
 
         for i in range(len(ntokens)):
             self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
@@ -418,8 +419,6 @@ class MRNNModel(nn.Module):
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # Note that t is input-indexed
                 if curr_t is not None: t = curr_t
-                # We initialize the score_softmax to be such that the model prefers 
-                # the backbone RNN in the first measure. TODO magic number
                 # Encoding is based on input indexing, not outputs.
                 for b in range(bsz):
                     emb_t_b = emb_t.squeeze(1)[b].unsqueeze(0)
@@ -483,6 +482,15 @@ class MRNNModel(nn.Module):
                     h_prev = hidden['prev_dec'][b]
                     if len(beg_idxs[b]) <= 1 or t < beg_idxs[b][1]:
                         # Do not use decoder in first measure. beg_idxs[b][0] is 0.
+                        '''
+                        if args.cuda:
+                            score_softmax = Variable(torch.cuda.FloatTensor([10]),
+                                                requires_grad=False)
+                        else:
+                            score_softmax = Variable(torch.FloatTensor([10]), requires_grad=False)
+                        to_concat.append(self.get_new_output(
+                            h_backbone, h_prev, score_softmax, args))
+                        '''
                         to_concat.append(h_backbone)
                     else:
                         to_concat.append(self.get_new_output(

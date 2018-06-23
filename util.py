@@ -228,6 +228,7 @@ class PitchDurationVocab(SimpleVocab):
 
     @classmethod
     def mid2orig(clss, midf, include_measure_boundaries, channel):
+        print midf
         score = music21.converter.parse(midf)
         out = [(START_OF_TRACK_NAME, START_OF_TRACK_NAME)]
         time_signature = get_ts(score)
@@ -235,15 +236,11 @@ class PitchDurationVocab(SimpleVocab):
             for e in part:
                 if type(e) is music21.note.Note:
                     out.append((e.nameWithOctave, e.duration.quarterLength))
-                    measure_progress += e.duration.quarterLength
                 elif type(e) is music21.note.Rest:
                     out.append((e.name, e.duration.quarterLength))
-                    measure_progress += e.duration.quarterLength
-            if measure_progress < measure_limit:
-                out.append(('rest', measure_limit - measure_progress))
             break 
         out.append((END_OF_TRACK_NAME, END_OF_TRACK_NAME))
-        return out, measure_limit
+        return out, 0
 
     @classmethod
     def load_from_pickle(clss, path, vocab_fname):

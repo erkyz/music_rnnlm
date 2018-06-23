@@ -27,21 +27,22 @@ export LIBRARY_PATH=/opt/cudnn-8.0/lib64:$LD_LIBRARY_PATH
 # DATA_DIR="../music_data/CMaj_Jigs/" 
 CONDITION_NOTES=0
 SKIP=0
-C=1.5
 DISTANCE_THRESHOLD=0
 TEMPERATURE=1.0
 ARCH=$1
 RNN_TYPE='GRU'
 NHID=$4 # TODO
 SEED=10
-BSZ=16 # TODO pay attention to this!
+BSZ=4 # TODO pay attention to this!
 EMSIZE=200
 DROP=$5
 NL=$6
 
 EPOCHS=30
-DATA="../music_data/CMaj_Nottingham/"
-TMP_PREFIX="CMaj_Nottingham_correct"
+#DATA="../music_data/CMaj_Nottingham/"
+#TMP_PREFIX="CMaj_Nottingham_correct"
+DATA="../music_data/guitar_melodies_1500_final/"
+TMP_PREFIX="guitar_1500"
 
 #DATA="../music_data/010_011_large/" 
 #TMP_PREFIX="010_011_large"
@@ -51,6 +52,6 @@ METAF="meta.p"
 LR=0.002
 VOCAB_PATHS=\[\"$DATA\"\]
 
-python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --c=$C --distance_threshold=$DISTANCE_THRESHOLD --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$INFO_OUT --temperature=0.5 --save=$SAVE --baseline # --input_feed # --cnn_encoder  # --synth_data
+python train.py --cuda --nhid=$NHID --vocab_paths=$VOCAB_PATHS --path=$DATA --tmp_prefix=$TMP_PREFIX --batch_size=$BSZ --arch=$ARCH --rnn_type=$RNN_TYPE --seed=$SEED --lr=$LR --emsize=$EMSIZE --dropout=$DROP --skip_first_n_note_losses=$SKIP --nlayers=$NL --epochs=$EPOCHS --metaf=$METAF --train_info_out=$INFO_OUT --temperature=0.5 --save=$SAVE --baseline --input_feed #--checkpoint=$3 # --cnn_encoder  # --synth_data
 
 
