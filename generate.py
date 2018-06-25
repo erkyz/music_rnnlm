@@ -34,7 +34,7 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
 
     # Pass in the entirety of conditions even though we only look at up to t
     if args.use_metaf:
-        gen_data["metadata"] = [[meta_dict["segments"]]]
+        gen_data["metadata"] = [[meta_dict["measure_boundaries"]]]
 
     for t in range(min(args.max_events, len(events[0]))):
         for c in range(sv.num_channels):

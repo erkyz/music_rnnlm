@@ -15,9 +15,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--base', type=str, default='music_data',
                     help='location of the music data corpuses')
 parser.add_argument('--corpus', type=str, default='Nottingham',
-                    help='location of the specific corpus')
+                    help='name of the specific corpus directory within the |args.base| dir')
 parser.add_argument('--dir', type=str, default='train',
-                    help='name of specific dir')
+                    help='name of specific dir within the |args.corpus| dir')
 args = parser.parse_args()
 
 

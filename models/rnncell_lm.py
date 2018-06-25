@@ -21,30 +21,27 @@ class RNNCellModel(nn.Module):
 
     def __init__(self, args):
         super(RNNCellModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        ntokens = args.ntokens
-        dropout = args.dropout
+        ntokens = args.ntokens # TODO comment
 
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
+        self.num_channels = len(args.ntokens)
+        self.drop = nn.Dropout(args.dropout)
+        self.rnn_type = args.rnn_type
+        self.nhid = args.nhid
+        self.nlayers = args.nlayers
+
         for i in range(self.num_channels):
             self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        if args.rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-                args.emsize*self.num_channels, nhid, nlayers)
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
+        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
+            args.emsize*self.num_channels, args.nhid, args.nlayers)
+        for i in range(self.num_channels):
+            self.add_module('emb_decoder_' + str(i), nn.Linear(args.nhid, ntokens[i])) 
         self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
         self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
 
-        self.init_weights()
+        self.init_weights(args)
 
-        self.rnn_type = args.rnn_type
-        self.nhid = nhid
-        self.nlayers = nlayers
 
-    def init_weights(self):
+    def init_weights(self, args):
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.emb_encoders[i].weight.data)
             nn.init.xavier_normal(self.emb_decoders[i].weight.data)
@@ -133,36 +130,13 @@ def softmax2d(input, dim=1):
     return soft_max_nd.transpose(dim, len(input_size)-1)
 
 
-class AttentionRNNModel(nn.Module):
+class AttentionRNNModel(RNNCellModel):
     def __init__(self, args):
-        super(AttentionRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-         
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers) 
+        super(AttentionRNNModel, self).__init__(args)
         self.fc1 = nn.Linear(self.nhid+args.emsize, self.nhid) 
         self.fc2 = nn.Linear(self.nhid, 1)
 
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        # For backbone RNN
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-
-    def init_weights(self):
+    def init_weights(self, args):
         self.W_a = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.W_a)
         self.W_c = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid*2).zero_())
@@ -252,51 +226,31 @@ class AttentionRNNModel(nn.Module):
 TMP=10
 TWO=2
 
-class MRNNModel(nn.Module):
+class READRNNModel(RNNCellModel):
     def __init__(self, args):
-        super(MRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-         
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
+        super(READRNNModel, self).__init__(args)
+        # TODO comments
         for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i]+TMP, args.emsize)) 
             self.add_module('prev_emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
             self.add_module('prev_emb_encoder_2_' + str(i), nn.Embedding(ntokens[i], args.emsize))
         insize = args.emsize+TMP if args.input_feed else args.emsize
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            insize*self.num_channels, self.nhid, nlayers)
         self.prev_enc_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
         self.prev_dec_rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, self.nhid, nlayers)
-        four = 8
+        four = 8 # TODO
         self.fc1 = nn.Linear(self.nhid+1, self.nhid/four) # +1 for the simscore
         self.fc2 = nn.Linear(self.nhid/four, 1)
-        # self.fc3 = nn.Linear(self.nhid*2+1, self.nhid) # +1 for score_softmax
         self.fc3 = nn.Linear(1, self.nhid/four)
         self.fc4 = nn.Linear(self.nhid/four, 1)
         self.fc5 = nn.Linear(TWO+1, self.nhid/four) # +1 for num_left
         self.fc6 = nn.Linear(self.nhid/four, TMP) 
 
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        # For backbone RNN
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
         # For prev_enc RNN
         self.prev_emb_encoders = AttrProxy(self, 'prev_emb_encoder_') 
         # For prev_dec RNN
         self.prev_emb_encoders_2 = AttrProxy(self, 'prev_emb_encoder_2_') 
 
-        self.init_weights(args)
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
 
     def init_weights(self, args):
         self.default_future = nn.Parameter(torch.FloatTensor(TWO).zero_())
@@ -482,7 +436,8 @@ class MRNNModel(nn.Module):
                     h_prev = hidden['prev_dec'][b]
                     if len(beg_idxs[b]) <= 1 or t < beg_idxs[b][1]:
                         # Do not use decoder in first measure. beg_idxs[b][0] is 0.
-                        '''
+                        # TODO
+                        ''' 
                         if args.cuda:
                             score_softmax = Variable(torch.cuda.FloatTensor([10]),
                                                 requires_grad=False)
@@ -509,13 +464,13 @@ class MRNNModel(nn.Module):
 
             return decs, hidden
 
-# End MRNN
+# End READRNN
 
 
 class ERNNModel(nn.Module):
     def __init__(self, args):
         # Note: emsize of prev_emb is just nhid for now.
-        super(ERNNModel, self).__init__()
+        super(ERNNModel, self).__init__(args)
         nhid = args.nhid
         nlayers = args.nlayers
         dropout = args.dropout
@@ -535,13 +490,13 @@ class ERNNModel(nn.Module):
         self.prev_emb_encoders = AttrProxy(self, 'prev_emb_encoder_') 
         self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
 
-        self.init_weights()
+        self.init_weights(args)
 
         self.rnn_type = args.rnn_type
         self.nlayers = nlayers
         self.sigmoid = nn.Sigmoid()
 
-    def init_weights(self):
+    def init_weights(self, args):
         self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
         nn.init.xavier_normal(self.A)
         self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
@@ -654,483 +609,4 @@ class ERNNModel(nn.Module):
 ## END ERNN
 
 
-
-
-"""
-UNUSED MODELS
-"""
-
-class PRNNModel(nn.Module):
-    def __init__(self, args):
-        super(PRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
-        self.parallel_rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-        self.sigmoid = nn.Sigmoid()
-
-    def init_weights(self):
-        self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.A)
-        self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.B)
-        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        if self.is_lstm():
-            main_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, self.nhid).zero_()))
-            parallel_hidden= (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, self.nhid).zero_()))
-        else:
-            main_hidden = Variable(weight.new(bsz, self.nhid).zero_())
-            parallel_hidden = Variable(weight.new(bsz, self.nhid).zero_())
-        return {'main': main_hidden, 'parallel': parallel_hidden}
-    
-    def get_new_h_t(self, curr_h, prev_data, conditions, batch_size, t, args):
-        to_concat = []
-        for b in range(batch_size):
-            if args.baseline:
-                prev = self.default_h
-            else:
-                prev_idx = conditions[b][t]
-                w = 1
-                use_prev = t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx < t-w
-                prev = prev_data[prev_idx+w][b] if use_prev else self.default_h
-            l = torch.matmul(self.A, curr_h[b])
-            r = torch.matmul(self.B, prev)
-            to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
-        return torch.cat(to_concat, dim=0)
-
-
-    # TODO implement this for PRNN
-    def forward_ss(self, data, hidden, args, prev_data=None):
-         return 
-
-    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
-        # hidden is a dict
-        if args.ss:
-            return self.forward_ss(data, hidden, args, prev_data)
-        else:
-            # list of (bsz,seqlen)
-            inputs = data["data"]
-            train_mode = prev_data is None
-            # data["conditions"] is a list of (bsz,seqlen)
-            conditions = data["conditions"][0].data.tolist() 
-            output = []
-            batch_size = inputs[0].size(0)
-            embs = []
-            for c in range(self.num_channels):
-                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-            rnn_input = torch.cat(embs, dim=2)
-            if prev_data is None:
-                # Train mode
-                prev_data = [hidden["parallel"][0] if self.is_lstm() else hidden["parallel"]]
-            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                main_h = hidden["main"]
-                parallel_h = hidden["parallel"]
-                curr_main_h = main_h[0] if self.is_lstm() else main_h
-                new_h_t = self.get_new_h_t(curr_main_h, prev_data, conditions, batch_size, t, args)
-                if self.is_lstm():
-                    hidden["main"] = self.rnn(emb_t.squeeze(1), (new_h_t, main_h[1]))
-                    hidden["parallel"] = self.parallel_rnn(emb_t.squeeze(1), parallel_h)
-                else:
-                    hidden["main"] = self.rnn(emb_t.squeeze(1), new_h_t)
-                    hidden["parallel"] = self.rnn(emb_t.squeeze(1), parallel_h)
-                prev_data.append(parallel_h[0] if self.is_lstm() else parallel_h)
-                output += [hidden["main"][0] if self.is_lstm() else hidden["main"]]
-            output = torch.stack(output, 1)
-            output = self.drop(output)
-
-            decs = []
-            for i in range(self.num_channels):
-                decoded = self.emb_decoders[i](
-                    output.view(output.size(0)*output.size(1), output.size(2)))
-                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, hidden
-
-
-## END PRNN
-
-
-class VineRNNModel(nn.Module):
-    ''' Conditional RNN: in this case, we concat the conditions to the RNN input '''
-    def __init__(self, args):
-        super(VineRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        if args.rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-                args.emsize*self.num_channels, self.nhid, nlayers)
-        else:
-            try:
-                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[args.rnn_type]
-            except KeyError:
-                raise ValueError( """An invalid option for `--model` was supplied,
-                                 options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(args.emsize, self.nhid, nlayers, nonlinearity=nonlinearity)
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-
-    def init_weights(self):
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def forward(self, data, hidden, prev_data=None):
-        ''' input should be a list with aligned inputs for each channel '''
-        ''' conditions should be a list with indices of the prev hidden states '''
-        ''' for conditioning. -1 means no condition '''
-        ''' returns a list of outputs for each channel '''
-        # list of (bsz,seqlen)
-        inputs = data["data"]
-        # data["conditions"] is a list of (bsz,seqlen)
-        conditions = data["conditions"][0].data.tolist() # TODO
-        output = []
-        batch_size = inputs[0].size(0)
-        embs = []
-        for c in range(self.num_channels):
-            embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-        rnn_input = torch.cat(embs, dim=2)
-        if prev_data is None:
-            prev_data = [hidden]
-        for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-            to_cat = []
-            for b in range(batch_size):
-                # TODO make this work for LSTMs
-                to_cat.append(torch.unsqueeze(prev_data[conditions[b][t]][b], 0))
-            new_h = torch.cat(to_cat, dim=0)
-            hidden = self.rnn(emb_t.squeeze(1), new_h)
-            prev_data.append(hidden)
-            output += [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-        output = torch.stack(output, 1)
-        output = self.drop(output)
-
-        decs = []
-        for i in range(self.num_channels):
-            decoded = self.emb_decoders[i](
-                output.view(output.size(0)*output.size(1), output.size(2)))
-            decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-        return decs, prev_data[-1]
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, self.nhid).zero_()))
-        else:
-            return Variable(weight.new(bsz, self.nhid).zero_())
-
-
-## END VINE
-
-
-class XRNNModel(nn.Module):
-    # TODO OOP.
-    def __init__(self, args):
-        super(XRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        if args.rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-                args.emsize*self.num_channels, self.nhid, nlayers)
-        else:
-            try:
-                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[args.rnn_type]
-            except KeyError:
-                raise ValueError( """An invalid option for `--model` was supplied,
-                                 options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(args.emsize, self.nhid, nlayers, nonlinearity=nonlinearity)
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-        self.sigmoid = nn.Sigmoid()
-
-    def init_weights(self):
-        self.A = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.A)
-        self.B = nn.Parameter(torch.FloatTensor(self.nhid,self.nhid).zero_())
-        nn.init.xavier_normal(self.B)
-        self.default_h = nn.Parameter(torch.FloatTensor(self.nhid).zero_())
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(weight.new(bsz, self.nhid).zero_()),
-                    Variable(weight.new(bsz, 2*self.nhid).zero_()))
-        else:
-            return Variable(weight.new(bsz, self.nhid).zero_())
-
-    def get_new_h_t(self, prev_data, conditions, batch_size, t, args):
-        to_concat = []
-        for b in range(batch_size):
-            prev_idx = conditions[b][t]
-            # prev = prev_data[prev_idx+1][b] if t > args.skip_first_n_note_losses and prev_idx != -1 and prev_idx != t-1 else self.default_h
-            prev = prev_data[prev_idx][b] if t > args.skip_first_n_note_losses and prev_idx != -1 else self.default_h
-            # prev = self.default_h
-            l = torch.matmul(self.A, prev_data[-1][b])
-            r = torch.matmul(self.B, prev)
-            to_concat.append(l.unsqueeze(0)+r.unsqueeze(0))
-        return torch.cat(to_concat, dim=0)
-
-
-    def forward_ss(self, data, hidden, args, prev_data=None):
-        # linear annealing 
-        prob_gold = max(float(args.epochs-args.epoch)/args.epochs, 0)
-
-        # list of (bsz,seqlen)
-        inputs = data["data"]
-        # data["conditions"] is a list of (bsz,seqlen)
-        conditions = data["conditions"][0].data.tolist() # TODO
-        batch_size = inputs[0].size(0)
-        if prev_data is None:
-            # Train mode
-            prev_data = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-                 
-        decs = [[]*self.num_channels]
-        tmp = []
-        for c in range(self.num_channels):
-            tmp.append(self.drop(self.emb_encoders[c](inputs[c][:,0])))
-        emb_t = torch.cat(tmp, dim=1)
-        for t in range(inputs[0].size(1)):
-            new_h_t = self.get_new_h_t(prev_data, conditions, batch_size, t, args)
-            if self.rnn_type == 'LSTM': 
-                hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
-            else:
-                hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-            out_t = hidden[0] if self.rnn_type == 'LSTM' else hidden
-            prev_data.append(out_t)
-            out_t = self.drop(out_t)
-            tmp = []
-            for c in range(self.num_channels):
-                decoded = self.emb_decoders[c](out_t)
-                decs[c].append(decoded.unsqueeze(1))
-                weights = torch.stack([F.softmax(decoded.data.div(args.temperature)[i]) for i in range(batch_size)], 0) 
-                sampled_idxs = torch.multinomial(weights, 1)
-                idx = inputs[c][:,t] if random.random() < prob_gold else sampled_idxs.squeeze()
-                tmp.append(self.drop(self.emb_encoders[c](idx)))
-            emb_t = torch.cat(tmp, dim=1)
-
-        for c in range(self.num_channels):
-            decs[c] = torch.cat(decs[c], dim=1)
-
-        return decs, hidden
-
-
-    def forward(self, data, hidden, args, prev_data=None):
-        ''' input should be a list with aligned inputs for each channel '''
-        ''' conditions should be a list with indices of the prev hidden states '''
-        ''' for conditioning. -1 means no condition '''
-        ''' returns a list of outputs for each channel '''
-        # print self.default_h
-        if args.ss:
-            return self.forward_ss(data, hidden, args, prev_data)
-        else:
-            # list of (bsz,seqlen)
-            inputs = data["data"]
-            # data["conditions"] is a list of (bsz,seqlen)
-            conditions = data["conditions"][0].data.tolist() # TODO
-            output = []
-            batch_size = inputs[0].size(0)
-            embs = []
-            for c in range(self.num_channels):
-                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-            rnn_input = torch.cat(embs, dim=2)
-            if prev_data is None:
-                # Train mode
-                prev_data = [hidden[0] if self.rnn_type == 'LSTM' else hidden]
-            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                new_h_t = self.get_new_h_t(prev_data, conditions, batch_size, t, args)
-                if self.rnn_type == 'LSTM': 
-                    hidden = self.rnn(emb_t.squeeze(1), (new_h_t, hidden[1]))
-                else:
-                    hidden = self.rnn(emb_t.squeeze(1), new_h_t)
-                prev_data.append(hidden[0] if self.rnn_type == 'LSTM' else hidden)
-                output += [prev_data[-1]]
-            output = torch.stack(output, 1)
-            output = self.drop(output)
-
-            decs = []
-            for i in range(self.num_channels):
-                decoded = self.emb_decoders[i](
-                    output.view(output.size(0)*output.size(1), output.size(2)))
-                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, prev_data[-1]
-
-# END XRNN
-
-'''
-class AttentionRNNModel(nn.Module):
-    def __init__(self, args):
-        super(AttentionRNNModel, self).__init__()
-        nhid = args.nhid
-        nlayers = args.nlayers
-        dropout = args.dropout
-        ntokens = args.ntokens
-         
-        self.num_channels = len(ntokens)
-        self.drop = nn.Dropout(dropout)
-        self.nhid = nhid # output dimension
-        for i in range(self.num_channels):
-            self.add_module('emb_encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-        self.rnn = getattr(nn, args.rnn_type + 'Cell')(
-            self.nhid+args.emsize*self.num_channels, self.nhid, nlayers) 
-        self.fc1 = nn.Linear(self.nhid+args.emsize, self.nhid) 
-        self.fc2 = nn.Linear(self.nhid, 1)
-
-        for i in range(len(ntokens)):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(self.nhid, ntokens[i])) 
-        # For backbone RNN
-        self.emb_encoders = AttrProxy(self, 'emb_encoder_') 
-        self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights()
-
-        self.rnn_type = args.rnn_type
-        self.nlayers = nlayers
-
-    def init_weights(self):
-        for i in range(self.num_channels):
-            nn.init.xavier_normal(self.emb_encoders[i].weight.data)
-            nn.init.xavier_normal(self.emb_decoders[i].weight.data)
-            self.emb_decoders[i].bias.data.fill_(0)
-
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
-
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        backbone = Variable(weight.new(bsz, self.nhid).zero_())
-        return {'backbone': backbone}
-   
-    def get_self_attention_new_input(self, h_backbone, prev_data, args):
-        # self-attention over previous segment encodings
-        vs = []
-        for i, prev_enc in enumerate(prev_data):
-            x = torch.cat([prev_enc.squeeze(1), h_backbone], dim=1)
-            x = self.fc1(x)
-            x = F.tanh(self.fc2(x))
-            vs.append(x)
-        softmax = F.softmax(torch.cat(vs, dim=1)) # bsz x t
-        bsz = softmax.size(0)
-        # This is not fast, but prev_data is a list for generate purposes (for now) 
-        att_prev_enc = sum([torch.cat(
-            [softmax[b][t]*prev_data[t][b] for b in range(bsz)]) for t in range(len(prev_data))])
-        new_input = torch.cat([h_backbone, att_prev_enc.squeeze(1)], dim=1)
-        return new_input
-
-    # TODO implement this 
-    def forward_ss(self, data, hidden, args, prev_data=None):
-         return 
-
-    def forward(self, data, hidden, args, prev_data=None, curr_t=None):
-        # hidden is a dict
-        # what we call "prev_data" is not actually previous hidden states.
-        train_mode = curr_t is None
-        if args.ss:
-            return self.forward_ss(data, hidden, args, prev_data)
-        else:
-            # list of (bsz,seqlen)
-            inputs = data["data"]
-            bsz = inputs[0].size(0)
-           
-            output = []
-            embs = []
-            for c in range(self.num_channels):
-                embs.append(self.drop(self.emb_encoders[c](inputs[c])))
-            emb_start = self.emb_encoders[0](inputs[0][0][0])
-            rnn_input = torch.cat(embs, dim=2)
-
-            if train_mode:
-                # Train mode. Need to save this as a list because of generate-mode.
-                prev_data = []
-            for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
-                # Note that t is input-indexed
-                if curr_t is not None: t = curr_t
-                # We initialize the score_softmax to be such that the model prefers 
-                # the backbone RNN in the first measure. TODO magic number
-                # Encoding is based on input indexing, not outputs.
-                rnn_input_to_concat = []
-                
-                # In generate mode, t=0 even though we're at t=t, so index |inputs| with 0
-                t_to_use = t if train_mode else 0
-
-                prev_data.append(emb_t)
-                rnn_input_t = self.get_self_attention_new_input(hidden['backbone'], prev_data, args)
-                hidden['backbone'] = self.rnn(rnn_input_t, hidden['backbone'])
-                output += [hidden['backbone']]
-
-            output = torch.stack(output, 1)
-            output = self.drop(output)
-
-            decs = []
-            for i in range(self.num_channels):
-                decoded = self.emb_decoders[i](
-                    output.view(output.size(0)*output.size(1), output.size(2)))
-                decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
-            return decs, hidden
-'''
-
-# end AttentionRNNModel 
 

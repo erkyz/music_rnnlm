@@ -18,10 +18,11 @@ parser.add_argument('--data', type=str, default='../music_data/CMaj_Nottingham/'
                     help='location of the data corpus to sample from')
 parser.add_argument('--out', type=str, default='../music_data/guitar_melodies/',
                     help='where to put melodies')
+parser.add_argument('--max_note_num', type=int, default=450)
+
 args = parser.parse_args()
 
 num_negative = 0
-LIMIT = 450
 
 def handler(signum, frame):
     pass
@@ -130,33 +131,30 @@ def process(part, note_num, out, limit, skip_song, pickup_dur, ts):
                         print ("NEGATIVE DURATION", num_negative)
                         return [], [], True, 0, None
                 prev_note = e
-            if note_num == LIMIT:
+            if note_num == args.max_note_num:
                 break
-    if len(out) > LIMIT:
+    if len(out) > args.max_note_num:
         assert(False)
     return out, measure_starting_idxs, skip_song, note_num, ts
 
 
-ties = []
 multiple_ts = []
 no_chords = []
 num_skipped = 0
-for i, d in enumerate(['test']):# enumerate(['test', 'valid', 'train']):
+for i, d in enumerate(['test', 'valid', 'train']):
     metas = {}
     for f in glob.glob(args.data + d + '/' + "*.mid"):
         print ("Segment", f)
         signal.signal(signal.SIGALRM, handler)
         signal.alarm(30)
         try:
-            score = music21.converter.parse(f)
+            # Sometimes this function hangs.
+            score = music21.converter.parse(f) 
         except Exception:
-            print ("Took too long")
+            # I don't think solution works, though.
+            print ("Took too long") 
         #time_signature = util.get_ts(score)
         out = []
-
-        # NOTE this is VERY Nottingham-specific :(
-        # First, get the chord part. This determines how long the pickup is. 
-        # We're going to ignore the pickup in each song for clean measures.
 
         '''
         if len(score) == 1:
@@ -181,9 +179,13 @@ for i, d in enumerate(['test']):# enumerate(['test', 'valid', 'train']):
             print (measure_starting_idxs)
             ends = measure_starting_idxs[1:] + [note_num+1]
             basename = os.path.basename(f) 
-            segments = list(zip(measure_starting_idxs, ends))
-            segment_sdm = similarity.get_measure_sdm(out, segments)
-            metas[basename] = {'segments': segments, 'f': basename, 'segment_sdm': segment_sdm}
+            measure_boundaries = list(zip(measure_starting_idxs, ends))
+            measure_sdm = similarity.get_measure_sdm(out, measure_boundaries)
+            metas[basename] = {
+                    'measure_boundaries': measure_boundaries, 
+                    'f': basename, 
+                    'measure_sdm': measure_sdm
+            }
 
             s = music21.stream.Stream()
             s.append(ts) 
@@ -205,8 +207,6 @@ for i, d in enumerate(['test']):# enumerate(['test', 'valid', 'train']):
 
     pickle.dump(metas, open(args.out + d + '/meta.p', 'wb'))
 
-print (ties)
-print (len(ties))
 print (multiple_ts)
 print (len(multiple_ts))
 print (no_chords)

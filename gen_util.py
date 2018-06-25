@@ -21,7 +21,7 @@ def get_conditions(sv, args, vanilla_model, meta_dict):
     channel_conditions = [[] for _ in range(sv.num_channels)]
     for channel in range(sv.num_channels):
         if args.use_metaf:
-            ssm = meta_dict['segment_sdm']
+            ssm = meta_dict['measure_sdm']
         elif vanilla_model is None:
             melody2, _ = sv.mid2orig(args.condition_piece, include_measure_boundaries=True, channel=channel)
             args.window = max(int(args.c*similarity.get_avg_dist_between_measures(melody2, sv)), similarity.MIN_WINDOW)

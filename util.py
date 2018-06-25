@@ -4,15 +4,7 @@ import music21
 import numpy as np
 import fnmatch
 
-
-CONDITIONALS = {'xrnn', 'vine', 'prnn', 'ernn', 'mrnn'}
-PADDING_NAME = 'padding'
-START_OF_TRACK_NAME = 'start'
-END_OF_TRACK_NAME = 'end'
-MEASURE_NAME = 'measure'
-NUM_SPLIT = 4  # number of splits per quarter note
-NUM_PITCHES = 128
-GEN_RESOLUTION = 480
+from vocab import *
 
 #### Math
 
@@ -71,31 +63,6 @@ def get_savef(args, corpus, extra=''):
         f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
     f += extra + '.p'
     return f
-
-
-def load_train_vocab(args):
-    tmp_prefix = '../tmp/' + args.tmp_prefix
-    if args.measure_tokens:
-        tmp_prefix += '_mt'
-    if args.factorize:
-        if args.progress_tokens:
-            vocabf = tmp_prefix + '_sv_factorized_measuretokens.p'
-            corpusf = tmp_prefix + '_corpus_factorized_measuretokens.p'
-            sv = FactorPDMVocab.load_from_corpus(args.vocab_path, vocabf)
-        else:
-            vocabf = tmp_prefix + '_sv_factorized.p'
-            corpusf = tmp_prefix + '_corpus_factorized.p'
-            sv = FactorPitchDurationVocab.load_from_corpus(args.vocab_path, vocabf)
-    elif args.use_metaf and args.vocab_paths == '':
-        vocabf = tmp_prefix + '_sv.p'
-        corpusf = tmp_prefix + '_corpus.p'
-        sv = PitchDurationVocab.load_from_pickle([args.path], vocabf)
-    else:
-        vocabf = tmp_prefix + '_sv.p'
-        corpusf = tmp_prefix + '_corpus.p'
-        sv = PitchDurationVocab.load_from_corpus(args.vocab_paths, vocabf)
-
-    return sv, vocabf, corpusf
 
 def itersubclasses(cls, _seen=None):
     if not isinstance(cls, type):

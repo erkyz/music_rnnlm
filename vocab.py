@@ -4,7 +4,8 @@ import music21
 from collections import defaultdict
 
 import events
-
+import util
+from constants import * 
 
 class SimpleVocab(object):
     '''
@@ -96,10 +97,9 @@ class PitchDurationVocab(SimpleVocab):
 
     @classmethod
     def mid2orig(clss, midf, include_measure_boundaries, channel):
-        print midf
         score = music21.converter.parse(midf)
         out = [(START_OF_TRACK_NAME, START_OF_TRACK_NAME)]
-        time_signature = get_ts(score)
+        time_signature = util.get_ts(score)
         for part in score:
             for e in part:
                 if type(e) is music21.note.Note:
@@ -133,7 +133,7 @@ class PitchDurationVocab(SimpleVocab):
         v = clss()
         for path in ast.literal_eval(paths):
 
-            filenames = getmidfiles(path) 
+            filenames = util.getmidfiles(path) 
             for filename in filenames:
                 # note that measure token is already included
                 events, _ = clss.mid2orig(filename, include_measure_boundaries=False, channel=0)
@@ -178,7 +178,7 @@ class FactorPitchDurationVocab(SimpleVocab):
     def mid2orig(clss, midf, include_measure_boundaries, channel):
         score = music21.converter.parse(midf)
         out = [START_OF_TRACK_NAME]
-        time_signature = get_ts(score)
+        time_signature = util.get_ts(score)
         measure_progress = 0
         measure_limit = time_signature.beatCount * time_signature.beatDuration.quarterLength
         for part in score:
@@ -198,7 +198,7 @@ class FactorPitchDurationVocab(SimpleVocab):
         if os.path.isfile(vocab_fname):
             return clss.load(vocab_fname)
         v = clss()
-        filenames = getmidfiles(path) 
+        filenames = util.getmidfiles(path) 
         for filename in filenames:
             for channel in range(2):
                 events, _ = clss.mid2orig(filename, False, channel)

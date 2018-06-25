@@ -10,7 +10,7 @@ import random
 import sys, os
 import argparse, pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import data, util, similarity, beam_search, gen_util
+import corpus, util, similarity, gen_util
 
 '''
 parser = argparse.ArgumentParser()

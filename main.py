@@ -17,6 +17,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import *
 from utils import *
+from constants import *
+from vocab import *
 import util
 import corpus
 import similarity
@@ -49,6 +51,7 @@ parser.add_argument('--cnn_encoder', action='store_true',
 # RNN params
 parser.add_argument('--rnn_type', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
+# TODO must be LSTM or GRU
 parser.add_argument('--arch', type=str, default='base')
 parser.add_argument('--emsize', type=int, default=100,
                     help='size of word embeddings')
@@ -125,7 +128,7 @@ parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
 args = parser.parse_args()
 args.use_metaf = (args.metaf != '')
-args.conditional_model = args.arch in util.CONDITIONALS or args.cnn_encoder
+args.conditional_model = args.arch in CONDITIONALS or args.cnn_encoder
 
 print args
 
@@ -140,6 +143,30 @@ if torch.cuda.is_available():
 ###############################################################################
 # Helper functions
 ###############################################################################
+
+def load_train_vocab(args):
+    tmp_prefix = 'tmp/' + args.tmp_prefix
+    if args.measure_tokens:
+        tmp_prefix += '_mt'
+    if args.factorize:
+        if args.progress_tokens:
+            vocabf = tmp_prefix + '_sv_factorized_measuretokens.p'
+            corpusf = tmp_prefix + '_corpus_factorized_measuretokens.p'
+            sv = FactorPDMVocab.load_from_corpus(args.vocab_path, vocabf)
+        else:
+            vocabf = tmp_prefix + '_sv_factorized.p'
+            corpusf = tmp_prefix + '_corpus_factorized.p'
+            sv = FactorPitchDurationVocab.load_from_corpus(args.vocab_path, vocabf)
+    elif args.use_metaf and args.vocab_paths == '':
+        vocabf = tmp_prefix + '_sv.p'
+        corpusf = tmp_prefix + '_corpus.p'
+        sv = PitchDurationVocab.load_from_pickle([args.path], vocabf)
+    else:
+        vocabf = tmp_prefix + '_sv.p'
+        corpusf = tmp_prefix + '_corpus.p'
+        sv = PitchDurationVocab.load_from_corpus(args.vocab_paths, vocabf)
+
+    return sv, vocabf, corpusf
 
 def repackage_hidden(h):
     """Wraps hidden states in new Variables, to detach them from their history."""
@@ -161,7 +188,7 @@ def get_batch_metadata(source, batch, bsz):
     source_slice = source[start_idx:start_idx+this_bsz]
     metadata = []
     for b in range(this_bsz):
-        metadata.append(source_slice[b][1]['segments'])
+        metadata.append(source_slice[b][1]['measure_boundaries'])
     return metadata
 
 
@@ -181,11 +208,7 @@ def get_batch_with_conditions(source, batch, bsz, sv, vanilla_model=None):
         # TODO shouldn't be channel 0...
         mel_idxs = source_slice[b][0]
         if args.use_metaf:
-            batch_conditions = source_slice[b][1]['segment_sdm']
-            # print source_slice[b][1]['segments']
-            # print source_slice[b][1]['f']
-            # print ssm
-            # print maxlen
+            batch_conditions = source_slice[b][1]['measure_sdm']
         elif args.vanilla_ckpt == '':
             pass
             # TODO other similarity measures.
@@ -295,8 +318,8 @@ def get_batch_variables(batches, batch, evaluation=False):
 ###############################################################################
 
 t = time.time()
-sv, vocabf, corpusf = util.load_train_vocab(args)
-corpus = data.Corpus.load_from_corpus(sv, vocabf, corpusf, args)
+sv, vocabf, corpusf = load_train_vocab(args)
+corpus = corpus.Corpus.load_from_corpus(sv, vocabf, corpusf, args)
 print "Time elapsed", time.time() - t
 
 args.ntokens = sv.sizes
@@ -307,20 +330,14 @@ if args.mode == 'train':
         print "Loading model checkpoint"
         with open(args.checkpoint, 'rb') as f:
             model = torch.load(f)
-    elif args.arch == "prnn":
-        model = rnncell_lm.PRNNModel(args)
-    elif args.arch == "xrnn":
-        model = rnncell_lm.XRNNModel(args) 
     elif args.arch == "ernn":
         model = rnncell_lm.ERNNModel(args) 
     elif args.arch == "mrnn":
-        model = rnncell_lm.MRNNModel(args)
+        model = rnncell_lm.READRNN(args)
     elif args.arch == "attn":
         model = rnncell_lm.AttentionRNNModel(args)
     elif args.arch == "cell":
         model = rnncell_lm.RNNCellModel(args) 
-    elif args.arch == "vine":
-        model = rnncell_lm.VineRNNModel(args) 
     else:
         model = rnnlm.RNNModel(args)
     
@@ -410,17 +427,17 @@ def evaluate_ssm():
         print [e.i for e in generated[1:][:-1]]
         gen_measure_sdm = similarity.get_measure_sdm(
                 [e.original for e in generated[1:][:-1]], 
-                meta_dict['segments'])
+                meta_dict['measure_boundaries'])
         if args.synth_data:
-            repeating_sections = meta_dict['repeating_sections']
+            repeating_measures = meta_dict['repeating_measures']
         else:
             # Get repeating sections (those with ED=0 in gold segment sdm)
-            zero_idxs = np.where(meta_dict['segment_sdm'] == 0)
-            repeating_sections = []
+            zero_idxs = np.where(meta_dict['measure_sdm'] == 0)
+            repeating_measures = []
             for i in range(zero_idxs[0].shape[0]):
                 if zero_idxs[0][i] <= zero_idxs[1][i]:
-                    repeating_sections.append((zero_idxs[0][i], zero_idxs[1][i]))
-        for repeats in repeating_sections:
+                    repeating_measures.append((zero_idxs[0][i], zero_idxs[1][i]))
+        for repeats in repeating_measures:
             repeat_tups = list(combinations(repeats, 2))
             for i,j in repeat_tups:
                 total_repeat_ed += gen_measure_sdm[i,j]
