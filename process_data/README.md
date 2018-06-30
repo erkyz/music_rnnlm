@@ -2,7 +2,7 @@
 
 We can either synthesize data or process existing data into our pipeline. Either way, for each corpus of music data, we create three directories: ```train```, ```valid```, and ```test```. In each directory, we need a ```meta.p``` file. This file is created by running either ```synthesis.sh``` or ```measure_segmenter.sh```. In fact, ```meta.p``` file stores all event data; the MIDI files outputted are for ease of inspection. 
 
-You can create training examples using a different method than the two here, so long as you create a ```meta.p``` file. Currently, all that is required for ```main.py``` are the ```origs```, ```measure_boundaries```, ```ts```, and ```f``` (filename) fields.
+You can create training examples using a different method than the two here, so long as you create a ```meta.p``` file. Currently, all that is required for ```main.py``` are the ```origs```, ```measure_sdm```, ```measure_boundaries```, ```ts```, and ```f``` (filename) fields.
 
 
 ## Synthesizing data
