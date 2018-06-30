@@ -1,4 +1,4 @@
-CONDITIONALS = {'xrnn', 'vine', 'prnn', 'ernn', 'mrnn'}
+CONDITIONALS = {'ernn', 'readrnn'}
 PADDING_NAME = 'padding'
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'

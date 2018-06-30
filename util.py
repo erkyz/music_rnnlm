@@ -3,6 +3,7 @@ import pickle, math, os
 import music21
 import numpy as np
 import fnmatch
+import torch.nn.functional as F
 
 from vocab import *
 
@@ -26,6 +27,19 @@ def weightedChoice(weights, objects, apply_softmax=False, alpha=None):
     idx = sum(cs < np.random.rand()) #Find the index of the first weight over a random value.
     idx = min(idx, len(objects)-1)
     return objects[idx]
+
+def softmax2d(input, dim=1):
+    input_size = input.size()
+    
+    trans_input = input.transpose(dim, len(input_size)-1)
+    trans_size = trans_input.size()
+
+    input_2d = trans_input.contiguous().view(-1, trans_size[-1])
+    
+    soft_max_2d = F.softmax(input_2d)
+    
+    soft_max_nd = soft_max_2d.view(*trans_size)
+    return soft_max_nd.transpose(dim, len(input_size)-1)
 
 
 #### File utils

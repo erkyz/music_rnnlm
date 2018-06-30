@@ -1,4 +1,3 @@
-# For Nottingham.
 import sys, os
 import argparse
 import glob

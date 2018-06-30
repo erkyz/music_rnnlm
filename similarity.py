@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys, os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import gen_util, vocab
 
 # min window if we use "c"

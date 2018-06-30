@@ -14,16 +14,12 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
     model.eval()
     bsz = 1
     hidden = model.init_hidden(bsz)
-    if args.arch == 'prnn':
-        prev_data = [hidden["parallel"]]
-    elif args.arch == 'attn':
+    if args.arch == 'attn':
         prev_data = []
-    elif args.arch == 'mrnn':
-        prev_data = {'score_softmax': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
-    elif args.arch == 'ernn':
-        prev_data = [] 
-    else: # XRNN
-        prev_data = [hidden]
+    elif args.arch == 'readrnn':
+        prev_data = {'delta_tilde': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
+    else: 
+        prev_data = []
     gen_data = gen_util.make_data_dict(args, sv)
     gen_data["conditions"] = conditions
     gen_data["cuda"] = args.cuda

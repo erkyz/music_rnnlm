@@ -49,14 +49,16 @@ parser.add_argument('--cnn_encoder', action='store_true',
                     help='use a CNN to encode the SSM that the RNN decodes')
 
 # RNN params
+# TODO support RNN_TANH, RNN_RELU, LSTM
 parser.add_argument('--rnn_type', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
-# TODO must be LSTM or GRU
 parser.add_argument('--arch', type=str, default='base')
 parser.add_argument('--emsize', type=int, default=100,
                     help='size of word embeddings')
 parser.add_argument('--nhid', type=int, default=1024,
                     help='number of hidden units per layer')
+parser.add_argument('--gates_nhid', type=int, default=256,
+                    help='number of hidden units for any gates')
 parser.add_argument('--nlayers', type=int, default=1,
                     help='number of layers')
 parser.add_argument('--lr', type=float, default=0.0001,
@@ -77,9 +79,10 @@ parser.add_argument('--ss', action='store_true',
                     help='scheduled sampling')
 parser.add_argument('--baseline', action='store_true',
                     help='use baseline version of model')
-parser.add_argument('--input_feed', action='store_true',
-                    help='use input feeding')
-
+parser.add_argument('--input_feed_num', type=int, default=0, 
+                    help='number of future measures to feed')
+parser.add_argument('--input_feed_dim', type=int, default=0, 
+                    help='num dimensions to concat for input feeding')
 
 
 # Stuff for measure splitting
@@ -332,7 +335,7 @@ if args.mode == 'train':
             model = torch.load(f)
     elif args.arch == "ernn":
         model = rnncell_lm.ERNNModel(args) 
-    elif args.arch == "mrnn":
+    elif args.arch == "readrnn":
         model = rnncell_lm.READRNN(args)
     elif args.arch == "attn":
         model = rnncell_lm.AttentionRNNModel(args)
@@ -405,7 +408,12 @@ if args.mode == 'train':
 
 NUM_TO_GENERATE = 50
 
-def evaluate_ssm():
+def get_rsed():
+    ''' 
+    Gets "repeating-section edit distance," which is the average distance
+    between repeating sections.
+    '''
+
     # Turn on evaluation mode which disables dropout.
     model.eval()
     path = args.path + 'train/'
@@ -478,19 +486,12 @@ def train():
         # hidden = repackage_hidden(hidden)
         hidden = model.init_hidden(args.batch_size)
         if args.cnn_encoder:
-            if args.arch in {'mrnn', 'attn'}:
+            if args.arch in {'readrnn'}:
                 hidden['backbone'] = cnn(data["conditions"][0], args)
         if args.arch == "hrnn":       
             data["special_event"] = corpus.vocab.special_events['measure'].i
         outputs, hidden = model(data, hidden, args)
-        '''
-        print data["targets"][0]
-        print data["conditions"]
-        print outputs[0][0,11]
-        assert(False)
-        '''
 
-        # print outputs
         word_idxs = []
         for i in range(outputs[0].size(1)):
             m, am = 0, 0
@@ -534,7 +535,7 @@ if args.mode == 'train':
             train_loss = train()
             val_loss = evaluate(valid_data, valid_mb_indices)
             val_perp = math.exp(val_loss) if val_loss < 100 else float('nan')
-            gen_ED = evaluate_ssm()
+            gen_ED = get_rsed()
             print "Gen ED", gen_ED
             print('-' * 89)
             print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} | valid loss {:5.2f} | '
