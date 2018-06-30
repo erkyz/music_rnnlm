@@ -15,17 +15,20 @@ class AttrProxy(object):
 
 class RNNModel(nn.Module):
     def __init__(self, args):
-        '''
-        ntokens is a list of the numbers of tokens in the dictionary of each channel
-        '''
         super(RNNModel, self).__init__()
         nhid = args.nhid
         nlayers = args.nlayers
         dropout = args.dropout
+        # |ntokens| is a list of the numbers of tokens in the dictionary of each channel
         ntokens = args.ntokens
 
         self.num_channels = len(ntokens)
         self.drop = nn.Dropout(dropout)
+        self.rnn_type = args.rnn_type
+        self.nhid = nhid
+        self.nlayers = nlayers
+
+        # Embedding "encoder"
         for i in range(self.num_channels):
             self.add_module('encoder_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
         if args.rnn_type in ['LSTM', 'GRU']:
@@ -38,23 +41,26 @@ class RNNModel(nn.Module):
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             self.rnn = nn.RNN(args.emsize, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+        # Embedding "decoder"
         for i in range(len(ntokens)):
             self.add_module('decoder_' + str(i), nn.Linear(nhid, ntokens[i])) 
+        
+        # Access like a list, where index is the channel idx.
         self.encoders = AttrProxy(self, 'encoder_') 
         self.decoders = AttrProxy(self, 'decoder_') 
 
         self.init_weights()
 
-        self.rnn_type = args.rnn_type
-        self.nhid = nhid
-        self.nlayers = nlayers
+    @property
+    def need_conditions(self):
+        return False
 
     def init_weights(self):
-        initrange = 0.1
-        for i in range(self.num_channels):
-            self.encoders[i].weight.data.uniform_(-initrange, initrange)
-            self.decoders[i].bias.data.fill_(0)
-            self.decoders[i].weight.data.uniform_(-initrange, initrange)
+        # Xavier initialization
+        for c in range(self.num_channels):
+            nn.init.xavier_normal(self.encoders[c].weight.data)
+            nn.init.xavier_normal(self.decoders[c].weight.data)
+            self.decoders[c].bias.data.fill_(0)
 
     def forward(self, data, hidden):
         ''' input should be a list with aligned inputs for each channel '''
@@ -65,10 +71,8 @@ class RNNModel(nn.Module):
         for i in range(self.num_channels):
             embs.append(self.drop(self.encoders[i](torch.t(inputs[i])))) 
         rnn_input = torch.cat(embs, dim=2) 
-        # TODO
-        # packed_input = torch.nn.utils.rnn.pack_padded_sequence(emb, seq_lens, batch_first=True)
+        # TODO use rnn.pack_padded_sequence to save computation?
         output, hidden = self.rnn(rnn_input, hidden)
-        # output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
         output = self.drop(torch.transpose(output, 0, 1))
         decs = []
         for i in range(self.num_channels):
@@ -78,6 +82,7 @@ class RNNModel(nn.Module):
         return decs, hidden
 
     def init_hidden(self, bsz):
+        # Zero initialization
         weight = next(self.parameters()).data
         if self.rnn_type == 'LSTM':
             return (Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()),
@@ -85,23 +90,32 @@ class RNNModel(nn.Module):
         else:
             return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
 
-
-
+# END RNNModel
 
 
 class CRNNModel(RNNModel):
-    ''' Conditional RNN: in this case, we concat the conditions to the RNN input '''
+    '''
+    Very simple conditional RNN where we embed the conditions and concat to the RNN input 
+    '''
     def __init__(self, args):
         super(CRNNModel, self).__init__()
 
         self.num_conditions = args.num_conditions
-        # conditions encoder
+        # Conditions encoder is added on as the last encoder in self.encoders.
+        # We embed from the number of conditions into |args.emsize|
         self.add_module('encoder_' + str(self.num_channels), nn.Embedding(args.num_conditions, args.emsize))
 
+    @property
+    def need_conditions(self):
+        return True
+
     def forward(self, data, hidden):
-        ''' input should be a list with aligned inputs for each channel '''
-        ''' conditions should be a list with aligned inputs for each channel '''
-        ''' returns a list of outputs for each channel '''
+        '''
+        data["data"] should be a list with aligned inputs for each channel 
+        data["conditions"] should be a list with aligned inputs for each channel 
+        
+        Returns a list of outputs for each channel 
+        '''
 
         inputs = data["data"]
         conditions = data["conditions"]
@@ -126,11 +140,4 @@ class CRNNModel(RNNModel):
             decs.append(decoded.view(output.size(0), output.size(1), decoded.size(1)))
         return decs, hidden
 
-    def init_hidden(self, bsz):
-        weight = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()),
-                    Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()))
-        else:
-            return Variable(weight.new(self.nlayers, bsz, self.nhid).zero_())
-
+# END CRNNModel

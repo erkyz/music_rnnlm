@@ -80,7 +80,9 @@ def process(part, note_num, out, limit, skip_song, pickup_dur, ts):
     print ("limit is", limit)
 
     for i_e, e in enumerate(part): # this is the melody Part
-        # Throw out the pickup for Nottingham
+        # Throw out the pickup for Nottingham.
+        # Commented out if we're not working with non-Nottingham music.
+        # TODO add a flag.
         '''
         if on_pickup and type(e) in {music21.note.Note, music21.note.Rest, music21.chord.Chord}:
             if section_progress < pickup_dur:
@@ -152,18 +154,8 @@ for i, d in enumerate(['test', 'valid', 'train']):
         except Exception:
             # I don't think solution works, though.
             print ("Took too long") 
-        #time_signature = util.get_ts(score)
         out = []
 
-        '''
-        if len(score) == 1:
-            no_chords.append(f)
-            continue
-        if type(score[1][2]) is music21.note.Rest:
-            pickup_dur = score[1][2].duration.quarterLength
-        print (pickup_dur)
-        '''
-        
         limit = None
         skip_song = False
         ts = None

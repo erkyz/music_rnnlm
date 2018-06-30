@@ -5,12 +5,12 @@ import numpy as np
 import sys, os
 import argparse
 
-import corpus, similarity, gen_util
+import corpus, similarity, gen_util, util
 
 
 NO_INFO_EVENT_IDX = 3
 
-def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None, end=False):
+def generate(model, events, conditions, meta_dict, args, sv, end=False):
     model.eval()
     bsz = 1
     hidden = model.init_hidden(bsz)
@@ -19,8 +19,8 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
     elif args.arch == 'readrnn':
         prev_data = {'delta_tilde': [None for b in range(bsz)], 'encs': [[] for b in range(bsz)]}
     else: 
-        prev_data = []
-    gen_data = gen_util.make_data_dict(args, sv)
+        prev_data = None # not needed
+    gen_data = gen_util.make_data_dict(args, sv, util.need_conditions(model, args))
     gen_data["conditions"] = conditions
     gen_data["cuda"] = args.cuda
     generated_events = [[sv.i2e[c][events[c][0]]] for c in range(sv.num_channels)]
@@ -39,9 +39,7 @@ def generate(model, events, conditions, meta_dict, args, sv, vanilla_model=None,
             else:
                 gen_data["data"][c].data.fill_(word_idxs[c])
 
-        if args.arch == "hrnn":
-            outputs_t, hidden = model(gen_data, hidden, sv.special_events['measure'].i)
-        elif args.conditional_model:
+        if util.need_conditions(model, args):
             # prev_data modified in place
             outputs_t, hidden = model(gen_data, hidden, args, prev_data, t)
         else:

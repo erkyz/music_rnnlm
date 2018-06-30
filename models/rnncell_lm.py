@@ -66,6 +66,10 @@ class RNNCellModel(nn.Module):
             nn.init.xavier_normal(self.emb_decoders[c].weight.data)
             self.emb_decoders[c].bias.data.fill_(0)
 
+    @property
+    def need_conditions(self):
+        return False
+
     # Scheduled sampler
     # NOTE I haven't verified whether this works in a while.
     def forward_ss(self, data, hidden, args):
@@ -122,6 +126,7 @@ class RNNCellModel(nn.Module):
             for i in range(self.num_channels):
                 embs.append(self.drop(self.backbone_embeddings[i](inputs[i])))
             rnn_input = torch.cat(embs, dim=2)
+            # TODO use rnn.pack_padded_sequence to save computation?
             for t, emb_t in enumerate(rnn_input.chunk(rnn_input.size(1), dim=1)):
                 # emb_t is [bsz x 1 x emsize]
                 hidden = self.rnn(emb_t.squeeze(1), hidden)
@@ -137,6 +142,7 @@ class RNNCellModel(nn.Module):
             return decs, hidden
 
     def init_hidden(self, bsz):
+        # Zero initialization
         weight = next(self.parameters()).data
         if self.rnn_type == 'LSTM':
             return (Variable(weight.new(bsz, self.nhid).zero_()),
@@ -163,9 +169,6 @@ class AttentionRNNModel(RNNCellModel):
             nn.init.xavier_normal(self.backbone_embeddings[i].weight.data)
             nn.init.xavier_normal(self.emb_decoders[i].weight.data)
             self.emb_decoders[i].bias.data.fill_(0)
-
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -309,8 +312,9 @@ class READRNNModel(RNNCellModel):
             nn.init.xavier_normal(self.emb_decoders[i].weight.data)
             self.emb_decoders[i].bias.data.fill_(0)
 
-    def is_lstm(self):
-        return self.rnn_type == 'LSTM'
+    @property
+    def need_conditions(self):
+        return False
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data

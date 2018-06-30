@@ -6,6 +6,26 @@ import fnmatch
 import torch.nn.functional as F
 
 from vocab import *
+from models import *
+
+### Misc.
+
+def init_model(args):
+    # Currently, rnnlm.CRNNModel is not used.
+    if args.arch == "readrnn":
+        return rnncell_lm.READRNN(args)
+    elif args.arch == "attn":
+        return rnncell_lm.AttentionRNNModel(args)
+    elif args.arch == "cell":
+        return rnncell_lm.RNNCellModel(args) 
+    elif args.arch == "base"::
+        return rnnlm.RNNModel(args)
+    else:
+        # args.arch needs to be a valid model.
+        assert False
+
+def need_conditions(model, args):
+   return args.cnn_encoder or model.need_conditions
 
 #### Math
 
@@ -56,9 +76,7 @@ def get_datadumpf(args, extra=''):
     if not args.copy_earliest:
         f += '_mostrecent'
     if args.conditional_model:
-        f += '_condmod'
-    if args.arch == 'xrnn':
-        f += '_xrnn'
+        f += '_condmodel'
     if args.vanilla_ckpt != '':
         f += '_vanilla'
     else:

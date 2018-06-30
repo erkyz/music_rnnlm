@@ -1,5 +1,5 @@
-CONDITIONALS = {'ernn', 'readrnn'}
 PADDING_NAME = 'padding'
+PADDING_IDX = 0
 START_OF_TRACK_NAME = 'start'
 END_OF_TRACK_NAME = 'end'
 MEASURE_NAME = 'measure'
