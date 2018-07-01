@@ -105,7 +105,7 @@ parser.add_argument('--checkpoint', type=str, default='',
 parser.add_argument('--condition_notes', type=int, default=0,
                     help='number of notes to condition the generation on')
 parser.add_argument('--outf', type=str, default='test',
-                    help='output file for generated text')
+                    help='output file prefix for generated songs')
 
 args = parser.parse_args()
 # Everything uses metaf now, but still may want to do something else later.
