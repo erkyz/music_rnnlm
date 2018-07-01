@@ -13,16 +13,18 @@ from models import *
 def init_model(args):
     # Currently, rnnlm.CRNNModel is not used.
     if args.arch == "readrnn":
-        return rnncell_lm.READRNN(args)
+        model = rnncell_lm.READRNNModel(args)
     elif args.arch == "attn":
-        return rnncell_lm.AttentionRNNModel(args)
+        model = rnncell_lm.AttentionRNNModel(args)
     elif args.arch == "cell":
-        return rnncell_lm.RNNCellModel(args) 
-    elif args.arch == "base"::
-        return rnnlm.RNNModel(args)
+        model = rnncell_lm.RNNCellModel(args) 
+    elif args.arch == "base":
+        model = rnnlm.RNNModel(args)
     else:
         # args.arch needs to be a valid model.
         assert False
+    model.init_weights(args)
+    return model
 
 def need_conditions(model, args):
    return args.cnn_encoder or model.need_conditions
@@ -70,30 +72,18 @@ def get_meta_dicts(path, args):
     else:
         return None
 
-def get_datadumpf(args, extra=''):
-    tmp_prefix = '../tmp/' + args.tmp_prefix
-    f = tmp_prefix + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
-    if not args.copy_earliest:
-        f += '_mostrecent'
-    if args.conditional_model:
-        f += '_condmodel'
-    if args.vanilla_ckpt != '':
-        f += '_vanilla'
-    else:
-        f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
-    f += extra + '.p'
+def get_datadumpf(args, has_conditions, suffix=''):
+    tmp_prefix = '../tmp/' + os.path.basename(args.path)
+    f = tmp_prefix + '_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses)
+    if has_conditions:
+        f += 'hasconds_'
+    f += suffix + '.p'
     return f
 
-def get_savef(args, corpus, extra=''):
+def get_savef(args, corpus, suffix=''):
     tmp_prefix = '../tmp/' 
-    f = tmp_prefix + args.arch + '_batch_data_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses) + 'vsize' + str(corpus.vocab.sizes[0]) + 'nh' + str(args.nhid) + 'em' + str(args.emsize)
-    if not args.copy_earliest:
-        f += '_mostrecent'
-    if args.vanilla_ckpt != '':
-        f += '_vanilla'
-    else:
-        f += '_c' + str(args.c) + 'dt' + str(args.distance_threshold)
-    f += extra + '.p'
+    f = tmp_prefix + 'MODCKPT' + args.arch + '_bsz' + str(args.batch_size) + 'skip' + str(args.skip_first_n_note_losses) + 'vsize' + str(corpus.vocab.sizes[0]) + 'nh' + str(args.nhid) + 'emsize' + str(args.emsize)
+    f += suffix + '.p'
     return f
 
 def itersubclasses(cls, _seen=None):

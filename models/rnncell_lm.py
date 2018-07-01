@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import random
 import time
+import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import util
@@ -34,21 +35,21 @@ class RNNCellModel(nn.Module):
 
         super(RNNCellModel, self).__init__()
         # A list of the number of tokens in each channel's vocab
-        ntokens = args.ntokens 
 
+        self.ntokens = args.ntokens 
         self.num_channels = len(args.ntokens)
         self.drop = nn.Dropout(args.dropout)
         self.rnn_type = args.rnn_type
         self.nhid = args.nhid
         self.nlayers = args.nlayers
-        self.dtype = args.cuda
+        self.dtype = torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
 
         for i in range(self.num_channels):
-            self.add_module('backbone_embedding_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
+            self.add_module('backbone_embedding_' + str(i), nn.Embedding(self.ntokens[i], args.emsize)) 
         self.rnn = getattr(nn, args.rnn_type + 'Cell')(
             args.emsize*self.num_channels, args.nhid, args.nlayers)
         for i in range(self.num_channels):
-            self.add_module('emb_decoder_' + str(i), nn.Linear(args.nhid, ntokens[i])) 
+            self.add_module('emb_decoder_' + str(i), nn.Linear(args.nhid, self.ntokens[i])) 
 
         # Embeddings for the main RNN, called the "backbone RNN." In this case, it is
         # the only RNN in the model. Access like a list, where index is the channel idx.
@@ -56,8 +57,6 @@ class RNNCellModel(nn.Module):
 
         # Decoder for the embedding back to the original vocab size.
         self.emb_decoders = AttrProxy(self, 'emb_decoder_') 
-
-        self.init_weights(args)
 
     def init_weights(self, args):
         # Xavier initialization
@@ -273,19 +272,21 @@ class READRNNModel(RNNCellModel):
         super(READRNNModel, self).__init__(args)
         # NOTE that we can generalize anything that says "measure" to arbitrary-length 
         # segments of a song.
+
+        self.gates_nhid = args.gates_nhid
         
         for i in range(self.num_channels):
-            self.add_module('encoder_rnn_embedding_' + str(i), nn.Embedding(ntokens[i], args.emsize)) 
-            self.add_module('decoder_rnn_embedding_' + str(i), nn.Embedding(ntokens[i], args.emsize))
+            self.add_module('encoder_rnn_embedding_' + str(i), nn.Embedding(self.ntokens[i], args.emsize)) 
+            self.add_module('decoder_rnn_embedding_' + str(i), nn.Embedding(self.ntokens[i], args.emsize))
         insize = args.emsize+args.input_feed_dim if args.input_feed_num else args.emsize
 
         # "Encoder RNN"
         self.encoder_rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
+            args.emsize*self.num_channels, self.nhid, self.nlayers)
 
         # "Decoder RNN"
         self.decoder_rnn = getattr(nn, args.rnn_type + 'Cell')(
-            args.emsize*self.num_channels, self.nhid, nlayers)
+            args.emsize*self.num_channels, self.nhid, self.nlayers)
 
         # For the scoring function
         self.fc1 = nn.Linear(self.nhid+1, self.gates_nhid) # +1 for the simscore
@@ -297,7 +298,7 @@ class READRNNModel(RNNCellModel):
         self.fc5 = nn.Linear(args.input_feed_num+1, self.gates_nhid) # +1 for num_left
         self.fc6 = nn.Linear(self.gates_nhid, args.input_feed_dim)
         # For encoder RNN
-        self.prev_backbone_embeddings = AttrProxy(self, 'encoder_rnn_embedding_') 
+        self.encoder_rnn_embeddings = AttrProxy(self, 'encoder_rnn_embedding_') 
         # For decoder RNN
         self.decoder_rnn_embeddings = AttrProxy(self, 'decoder_rnn_embedding_') 
 
@@ -307,14 +308,14 @@ class READRNNModel(RNNCellModel):
             self.default_future.cuda()
         for i in range(self.num_channels):
             nn.init.xavier_normal(self.backbone_embeddings[i].weight.data)
-            nn.init.xavier_normal(self.prev_backbone_embeddings[i].weight.data)
+            nn.init.xavier_normal(self.encoder_rnn_embeddings[i].weight.data)
             nn.init.xavier_normal(self.decoder_rnn_embeddings[i].weight.data)
             nn.init.xavier_normal(self.emb_decoders[i].weight.data)
             self.emb_decoders[i].bias.data.fill_(0)
 
     @property
     def need_conditions(self):
-        return False
+        return True
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -387,7 +388,7 @@ class READRNNModel(RNNCellModel):
                 0).unsqueeze(0)
         delta_tilde = torch.sum(torch.cat(
             [torch.mul(
-                torch.FloatTensor([delta[i]]), requires_grad=False).type(self.dtype),
+                Variable(torch.FloatTensor([delta[i]]), requires_grad=False).type(self.dtype),
                 softmax[i]
                 ) for i in range(len(prev_measure_encs))]
             ), 0)
@@ -411,7 +412,7 @@ class READRNNModel(RNNCellModel):
             This is used because in generate-mode, we generate note-by-note and need to
             pass in the previous information manually.
         |curr_t| is the current timestep, used in generate mode, again since we must keep
-            track of where we are. In train-mode, curr_t should not be passed in.
+            track of where we are. In train-mode, curr_t should not be passed.
         '''
 
         train_mode = curr_t is None
@@ -466,7 +467,7 @@ class READRNNModel(RNNCellModel):
                     # In generate mode, variable t is 0 even though we're not at time 0.
                     # When generating, we provide only this step input, so set t=0
                     t_to_use = t if train_mode else 0
-                    emb_t_b_enc = self.prev_backbone_embeddings[0](inputs[0][b][t_to_use]) 
+                    emb_t_b_enc = self.encoder_rnn_embeddings[0](inputs[0][b][t_to_use]) 
                     emb_t_b_dec = self.decoder_rnn_embeddings[0](inputs[0][b][t_to_use]) 
 
                     # Run the encoder RNN first
@@ -484,7 +485,7 @@ class READRNNModel(RNNCellModel):
                         prev_data['encs'][b].append(hidden['enc_rnn'][b])
 
                         decoder_h0, delta_tilde = self.self_attention(
-                                h_backbbone=hidden['backbone'][b],
+                                h_backbone=hidden['backbone'][b],
                                 prev_measure_encs=prev_data['encs'][b], 
                                 delta=sdm[b][len(prev_data['encs'][b])],
                                 args=args)

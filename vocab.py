@@ -12,6 +12,8 @@ class SimpleVocab(object):
     - Simple parent class for all vocabularies.
     - Designed for multiple "channels," which allows you to factorize an event into
         channels, for instance, pitch and duration, each with their own vocab.
+    - Similar to other LMs in the language domain, we create the vocab from existing
+        corpuses, only adding events that are actually present in the corpuses.
     '''
     
     def __init__(self, num_channels=1):
@@ -86,6 +88,8 @@ class SimpleVocab(object):
 
 
 class PitchDurationVocab(SimpleVocab):
+    ''' Vocab in which events are factorized by pitch and duration '''
+
     def __init__(self):
         super(PitchDurationVocab, self).__init__(num_channels=1)
         self.special_events = {
@@ -128,11 +132,13 @@ class PitchDurationVocab(SimpleVocab):
 
     @classmethod
     def load_from_corpus(clss, paths, vocab_fname):
+        '''
+        Create a PDV from multiple corpuses (located in the |paths| list)
+        '''
         if os.path.isfile(vocab_fname):
             return clss.load(vocab_fname)
         v = clss()
         for path in ast.literal_eval(paths):
-
             filenames = util.getmidfiles(path) 
             for filename in filenames:
                 # note that measure token is already included

@@ -114,9 +114,10 @@ def get_measure_sdm(melody, measure_boundaries):
     return ssm
 
 
-def get_hid_sim(hiddens, args, bnw=True):
+def get_hid_sim(hiddens, args, bnw=False):
     ''' 
-    Get cosine similarity SSM between hidden states in |hiddens|
+    Get cosine similarity SSM between hidden states in |hiddens|, then optionally 
+        return the SSM in "bnw" which means it's thresholded
     '''
 
     sims = np.zeros([len(hiddens), len(hiddens)])
@@ -126,7 +127,7 @@ def get_hid_sim(hiddens, args, bnw=True):
             r = hiddens[0][j] if args.rnn_type == 'LSTM' else hiddens[j]
             # cosine similarity
             sims[i,j] = sims[j,i] = (torch.matmul(l,torch.t(r)) / (torch.norm(l) * torch.norm(r) + .000001)).data[0][0] if not torch.equal(l.data, r.data) else 1
-    f = np.vectorize(lambda x : x >= 0.95)
+    f = np.vectorize(lambda x : x >= 0.95) # TODO magic number for threshold.
     return f(sims) if bnw else sims
 
 
@@ -135,8 +136,10 @@ def get_hid_sim(hiddens, args, bnw=True):
 ######################################################################
 
 def get_min_past_distance(melody, args):
-    ''' get the index for the event in the past that's most similar to the current event, '''
-    ''' for every event '''
+    ''' 
+    Get the index for the event in the past that's most similar to the current event, 
+        for every event. (Currently just thresholded by |args.distance_threshold|) 
+    '''
     sdm, _ = get_note_sdm(melody, args.window)
     prev_idxs = []
     # for each column, get the minimum before i
@@ -149,8 +152,11 @@ def get_min_past_distance(melody, args):
     return prev_idxs
 
 def get_future_from_past(melody, args):
-    ''' get the prediction for the next value based on the most similar sequence in the past '''
-    ''' melody is a PDV melody ''' # TODO don't do that. lol.
+    ''' 
+    Get the prediction for the next value based on the most similar sequence in the past
+    (Currently just thresholded by |args.distance_threshold|)
+    |melody| must be a PDV melody 
+    '''
     sdm, diffs = get_note_sdm(melody, args.window)
     # for each column, get the minimum before i
     future_preds = []
@@ -165,7 +171,7 @@ def get_future_from_past(melody, args):
             future_preds.append(2)
     return [x+1 for x in future_preds] # in {0,1,2,3}
 
-def get_note_ssm_past(melody, args, bnw=False):
+def get_note_ssm_past(melody, args):
     ''' 
     Gets the SDM of a melody by only looking into the future.
     |melody| is a PDV melody 
@@ -176,14 +182,11 @@ def get_note_ssm_past(melody, args, bnw=False):
     ssm = np.zeros([len(differences), len(differences)]) 
     for i in xrange(args.window-1, len(differences)):
         for j in xrange(i, len(differences)):
-            if bnw:
-                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) <= args.distance_threshold
-            else:
-                # NOTE: this is an SDM
-                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) 
+            # NOTE: this is an SDM
+            ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i-args.window+1:i+1], rawDiffs[j-args.window+1:j+1]) 
     return ssm, rawDiffs
 
-def get_note_ssm_future(melody, args, bnw=False):
+def get_note_ssm_future(melody, args):
     ''' 
     Gets the SDM of a melody by only looking into the future.
     |melody| is a PDV melody 
@@ -194,11 +197,8 @@ def get_note_ssm_future(melody, args, bnw=False):
     ssm = np.zeros([len(differences), len(differences)]) 
     for i in xrange(0, len(differences)-args.window):
         for j in xrange(i, len(differences)-args.window):
-            if bnw:
-                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1]) <= args.distance_threshold
-            else:
-                # NOTE: this is an SDM
-                ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1])
+            # NOTE: this is an SDM
+            ssm[i,j] = ssm[j,i] = edit_distance(rawDiffs[i:i+args.window+1], rawDiffs[j:j+args.window+1])
     return ssm, rawDiffs
 
 def get_prev_match_idx(ssm, args, sv):

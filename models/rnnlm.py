@@ -49,20 +49,18 @@ class RNNModel(nn.Module):
         self.encoders = AttrProxy(self, 'encoder_') 
         self.decoders = AttrProxy(self, 'decoder_') 
 
-        self.init_weights()
-
     @property
     def need_conditions(self):
         return False
 
-    def init_weights(self):
+    def init_weights(self, *arg):
         # Xavier initialization
         for c in range(self.num_channels):
             nn.init.xavier_normal(self.encoders[c].weight.data)
             nn.init.xavier_normal(self.decoders[c].weight.data)
             self.decoders[c].bias.data.fill_(0)
 
-    def forward(self, data, hidden):
+    def forward(self, data, hidden, *arg):
         ''' input should be a list with aligned inputs for each channel '''
         ''' returns a list of outputs for each channel '''
         inputs = data["data"]

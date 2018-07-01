@@ -26,7 +26,7 @@ import generate, gen_util
 parser = argparse.ArgumentParser(description='PyTorch MIDI RNN/LSTM Language Model')
 
 # Meta-training stuff
-parser.add_argument('--mode', type=str, 
+parser.add_argument('--mode', type=str, default="train",
                     help='one of (train, generate, get_hiddens)')
 parser.add_argument('--skip_first_n_note_losses', type=int, default=0,
                     help='"encode" first n bars')
@@ -36,13 +36,11 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 
 # Data stuff
-parser.add_argument('--path', type=str, default='music_data/CMaj_Nottingham/',
-                    help='location of the data corpus')
+parser.add_argument('--path', type=str, default='music_data/CMaj_Nottingham',
+                    help='location of the data corpus. Do not put a slash at the end.')
 parser.add_argument('--vocab_paths', type=str, default='',
-                    help='list (in string form) of location of the data corpuses
-                        used for the vocabulary')
-parser.add_argument('--tmp_prefix', type=str, default="tmp",
-                    help='prefix for tmp files')
+                    help='list (in string form) of location of the data corpuses'
+                        'used for the vocabulary')
 parser.add_argument('--save', type=str, default="",
                     help='override default model save filename')
 parser.add_argument('--train_info_out', type=str, default="test.csv",
@@ -82,7 +80,7 @@ parser.add_argument('--ss', action='store_true',
                     help='use scheduled sampling')
 parser.add_argument('--input_feed_num', type=int, default=0, 
                     help='number of future measures to feed')
-parser.add_argument('--input_feed_dim', type=int, default=0, 
+parser.add_argument('--input_feed_dim', type=int, default=10, 
                     help='num dimensions to concat for input feeding')
 
 # CNN params
@@ -128,8 +126,8 @@ if torch.cuda.is_available():
 ###############################################################################
 
 def load_train_vocab(args):
-    # Save all tmp files in the tmp/ directory (must exist)
-    tmp_prefix = 'tmp/' + args.tmp_prefix
+    # Save all tmp files in the tmp/ directory (must already exist)
+    tmp_prefix = 'tmp/' + os.path.basename(args.path)
     if args.factorize:
         vocabf = tmp_prefix + '_sv_factorized.p'
         corpusf = tmp_prefix + '_corpus_factorized.p'
@@ -145,16 +143,6 @@ def load_train_vocab(args):
 
     # The vocab has been saved to |vocobf|, likewise for the corpus.
     return sv, vocabf, corpusf
-
-def repackage_hidden(h):
-    """
-    Wraps hidden states in new Variables, to detach them from their history.
-    I don't think this is necessary, but just in case.
-    """
-    if type(h) == Variable:
-        return Variable(h.data)
-    else:
-        return tuple(repackage_hidden(v) for v in h)
 
 def get_batch_metadata(source, batch, bsz):
     start_idx = batch * bsz
@@ -221,7 +209,7 @@ def create_batch_tensor(source, batch_idx, bsz, sv):
     """
     def pad(tensor, length):
         return torch.cat([tensor, tensor.new(length - tensor.size(0), *tensor.size()[1:]).zero_()])
-    start_idx = batch * bsz
+    start_idx = batch_idx * bsz
     this_bsz = min(bsz, (len(source) - start_idx))
     source_slice = source[start_idx:start_idx+this_bsz]
     target_slice = [[mel[i+1] for i in range(len(mel)-1)] + [PADDING_IDX] for mel, _ in source_slice]
@@ -357,10 +345,11 @@ else:
 
 if args.mode == 'train':
     ''' Size: num_channels * num_batches * num_examples_in_batch_i '''
-    f = util.get_datadumpf(args)
+    f = util.get_datadumpf(args, util.need_conditions(model, args))
     if os.path.isfile(f):
         print "Load existing train data", f
         train_data, valid_data, test_data = pickle.load(open(f, 'rb'))
+        print "Done"
     else:
         print "Begin batchify"
         t = time.time()
@@ -434,7 +423,6 @@ def evaluate(eval_data, mb_indices):
         outputs_flat = [outputs[c].view(-1, ntokens[c]) for c in range(len(outputs))]
         total_loss += sum(
             [criterion(outputs_flat[c], data["targets"][c]) for c in range(len(outputs))]).data
-        hidden = repackage_hidden(hidden)
         hidden = model.init_hidden(args.batch_size)
     return total_loss[0] / len(mb_indices)
 
@@ -454,7 +442,6 @@ def train():
     random.shuffle(train_mb_indices)
     for batch in train_mb_indices:
         data = get_batch_variables(train_data, batch)
-        hidden = repackage_hidden(hidden)
         hidden = model.init_hidden(args.batch_size)
         if args.cnn_encoder:
             if args.arch in {'readrnn'}:
@@ -508,8 +495,8 @@ if args.mode == 'train':
             rsed = get_rsed()
             print('-' * 88)
             print "RSED", rsed
-            print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f} 
-                    | valid loss {:5.2f} | valid ppl {:8.2f}'.format(
+            print('| end of epoch {:3d} | time: {:5.2f}s | train loss {:5.2f}'
+                    '| valid loss {:5.2f} | valid ppl {:8.2f}'.format(
                         epoch, (time.time() - epoch_start_time), 
                         train_loss, val_loss, val_perp))
             print('-' * 88)
@@ -519,7 +506,8 @@ if args.mode == 'train':
             # Write to file without closing
             train_outf.flush()
             os.fsync(train_outf.fileno())
-            pickle.dump(losses, open(util.get_datadumpf(args, extra='curves'), 'wb'))
+            pickle.dump(losses, open(util.get_datadumpf(
+                args, util.need_conditions(model, args), suffix='curves'), 'wb'))
             # Save the model if the validation loss is the best we've seen so far.
             if best_val_loss is None or val_loss < best_val_loss:
                 with open(args.save if args.save != '' else util.get_savef(args, corpus), 'wb') as f:
